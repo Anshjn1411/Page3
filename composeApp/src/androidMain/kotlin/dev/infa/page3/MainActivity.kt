@@ -12,7 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import dev.infa.page3.bluetooth.BluetoothRepository
-import dev.infa.page3.connection.BackgroundConnectionService
+import dev.infa.page3.connection.BleConnectionService
 import dev.infa.page3.ui.theme.Page3Theme
 
 /**
@@ -44,7 +44,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    dev.infa.page3.App()
+                    App()
                 }
             }
         }
@@ -55,22 +55,7 @@ class MainActivity : ComponentActivity() {
         if (savedInfo != null) {
             Log.d(TAG, "Found saved device: ${savedInfo.name}")
             // Start background service to maintain connection
-            BackgroundConnectionService.start(this, savedInfo.name, savedInfo.address)
+            BleConnectionService.start(this, savedInfo.name, savedInfo.address)
         }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        Log.d(TAG, "MainActivity resumed")
-    }
-
-    override fun onPause() {
-        super.onPause()
-        Log.d(TAG, "MainActivity paused - service keeps connection")
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        Log.d(TAG, "MainActivity destroyed - service keeps connection")
     }
 }

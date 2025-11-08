@@ -14,10 +14,9 @@ import androidx.compose.runtime.staticCompositionLocalOf
  */
 @Composable
 fun Page3Theme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColors else LightColors
+    val colorScheme =  LightColors
 
     MaterialTheme(
         colorScheme = colorScheme,
@@ -27,21 +26,7 @@ fun Page3Theme(
     )
 }
 
-/**
- * Preview theme for light mode
- */
-@Composable
-fun Page3ThemeLight(content: @Composable () -> Unit) {
-    Page3Theme(darkTheme = false, content = content)
-}
 
-/**
- * Preview theme for dark mode
- */
-@Composable
-fun Page3ThemeDark(content: @Composable () -> Unit) {
-    Page3Theme(darkTheme = true, content = content)
-}
 
 // Extension properties for easy access to custom text styles
 val MaterialTheme.customTextStyles: Page3TextStyles

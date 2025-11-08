@@ -19,6 +19,8 @@ import dev.infa.page3.presentation.viewModel.CategoryViewModel
 import dev.infa.page3.presentation.viewModel.OrderViewModel
 import dev.infa.page3.presentation.viewModel.ProductViewModel
 import dev.infa.page3.presentation.viewmodel.WishlistViewModel
+import dev.infa.page3.ui.AccountDetailsContent
+import dev.infa.page3.ui.AccountDetailsScreen
 import dev.infa.page3.ui.MainScreen
 import dev.infa.page3.ui.SplashScreen
 import dev.infa.page3.ui.auth.OtpVerificationScreen
@@ -222,6 +224,25 @@ data class ProductDetail(
         ProductDetailScreen(
             productId = productId,
             navigator = navigator,
+            categoryViewModel = categoryViewModel,
+            productViewModel = productViewModel,
+            cartViewModel = cartViewModel,
+            authViewModel = authViewModel,
+            wishlistViewModel = wishlistViewModel
+        )
+    }
+}
+class AccountDetail() : Screen {
+    @Composable
+    override fun Content() {
+        val navigator = LocalNavigator.currentOrThrow
+        val categoryViewModel = AppViewModels.categoryViewModel
+        val productViewModel = AppViewModels.productViewModel
+        val wishlistViewModel = AppViewModels.wishListViewModel
+        val cartViewModel = AppViewModels.cartViewModel
+        val authViewModel = AppViewModels.authViewModel
+        AccountDetailsScreen(
+            navigator,
             categoryViewModel = categoryViewModel,
             productViewModel = productViewModel,
             cartViewModel = cartViewModel,

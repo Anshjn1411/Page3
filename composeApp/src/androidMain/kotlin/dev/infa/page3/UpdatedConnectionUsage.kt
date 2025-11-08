@@ -1,9 +1,5 @@
 package dev.infa.page3
 
-import androidx.compose.runtime.*
-import androidx.lifecycle.viewmodel.compose.viewModel
-import dev.infa.page3.viewmodels.ConnectionViewModel
-import dev.infa.page3.viewmodels.ConnectionUiState
 import dev.infa.page3.models.SmartWatch
 
 /**

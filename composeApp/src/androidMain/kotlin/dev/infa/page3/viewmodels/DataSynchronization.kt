@@ -70,147 +70,161 @@ class DataSynchronization(
 
         // 1) Try new sleep protocol via LargeDataHandler
         try {
-            LargeDataHandler.getInstance().syncSleepList(dayOffset,{}) { newProto ->
-                try {
-                    if (newProto != null && (newProto.list?.isNotEmpty() == true)) {
-                        addLog("New sleep protocol data received")
-                        val stages = mutableListOf<SleepStage>()
-                        var total = 0L; var deep = 0L; var light = 0L; var awake = 0L
-                        newProto.list?.forEach { bean ->
-                            val d = bean.d.toLong(); total += d
-                            val type = when (bean.t) { 3 -> { deep += d; SleepType.DEEP }; 2 -> { light += d; SleepType.LIGHT }; 5 -> { awake += d; SleepType.AWAKE }; else -> SleepType.LIGHT }
-                            stages.add(SleepStage(timestamp = (newProto.st + total).toLong(), type = type, duration = d.toInt()))
-                        }
-                        val sleepData = SleepData(
-                            date = getDateForOffset(dayOffset),
-                            totalDuration = total,
-                            deepSleepDuration = deep,
-                            lightSleepDuration = light,
-                            remDuration = 0,
-                            awakeDuration = awake,
-                            sleepTime = formatTimestampToTime(newProto.st),
-                            wakeTime = formatTimestampToTime(newProto.et),
-                            sleepScore = calculateSleepScore(total, deep, light),
-                            sleepEfficiency = calculateSleepEfficiency(total, deep, light),
-                            sleepQuality = getSleepQuality(calculateSleepScore(total, deep, light)),
-                            sleepStages = stages
-                        )
-                        sleepDataCallback?.invoke(sleepData)
-                        return@syncSleepList
-                    } else {
-                        addLog("New sleep protocol returned no data, falling back")
-                        tryDirectCommandApproach(deviceAddress, dayOffset)
-                    }
-                } catch (e: Exception) {
-                    addLog("ERROR: New sleep protocol processing: ${e.message}")
-                    tryDirectCommandApproach(deviceAddress, dayOffset)
+            LargeDataHandler.getInstance().syncSleepList(dayOffset,{r->
+                addLog("Name: , Sleep Time: ${r.sleepTime}")
+                addLog("Name: , Shallow Sleep Duration: ${r.shallowSleepDuration}")
+                addLog( "Name:, Deep Sleep Duration: ${r.deepSleepDuration}")
+
+                val list = r.list
+                for (l in list) {
+                    addLog( "Name: , Sleep Start: ${l.sleepStart}")
+                    addLog("Name: , Sleep End: ${l.sleepEnd}")
+                    addLog("Name: , Type: ${l.type}")
                 }
-            }
+
+
+            }){}
+//            { newProto ->
+////                try {
+////                    if (newProto != null && (newProto.list?.isNotEmpty() == true)) {
+////                        addLog("New sleep protocol data received")
+////                        val stages = mutableListOf<SleepStage>()
+////                        var total = 0L; var deep = 0L; var light = 0L; var awake = 0L
+////                        newProto.list?.forEach { bean ->
+////                            val d = bean.d.toLong(); total += d
+////                            val type = when (bean.t) { 3 -> { deep += d; SleepType.DEEP }; 2 -> { light += d; SleepType.LIGHT }; 5 -> { awake += d; SleepType.AWAKE }; else -> SleepType.LIGHT }
+////                            stages.add(SleepStage(timestamp = (newProto.st + total).toLong(), type = type, duration = d.toInt()))
+////                        }
+////                        val sleepData = SleepData(
+////                            date = getDateForOffset(dayOffset),
+////                            totalDuration = total,
+////                            deepSleepDuration = deep,
+////                            lightSleepDuration = light,
+////                            remDuration = 0,
+////                            awakeDuration = awake,
+////                            sleepTime = formatTimestampToTime(newProto.st),
+////                            wakeTime = formatTimestampToTime(newProto.et),
+////                            sleepScore = calculateSleepScore(total, deep, light),
+////                            sleepEfficiency = calculateSleepEfficiency(total, deep, light),
+////                            sleepQuality = getSleepQuality(calculateSleepScore(total, deep, light)),
+////                            sleepStages = stages
+////                        )
+////                        sleepDataCallback?.invoke(sleepData)
+////                        return@syncSleepList
+////                    } else {
+////                        addLog("New sleep protocol returned no data, falling back")
+////                        tryDirectCommandApproach(deviceAddress, dayOffset)
+////                    }
+////                } catch (e: Exception) {
+////                    addLog("ERROR: New sleep protocol processing: ${e.message}")
+////                    tryDirectCommandApproach(deviceAddress, dayOffset)
+////                }
+//            }
         } catch (_: Exception) {
-            // 2) Fallback to direct command
-            tryDirectCommandApproach(deviceAddress, dayOffset)
+
+            //tryDirectCommandApproach(deviceAddress, dayOffset)
         }
     }
 
     /**
      * Fallback method using direct command approach
      */
-    private fun tryDirectCommandApproach(deviceAddress: String, dayOffset: Int) {
-        try {
-            addLog("Using direct command approach for day offset: $dayOffset")
-            
-            commandHandle?.executeReqCmd(
-                ReadSleepDetailsReq(dayOffset, 0, 95),
-                object : ICommandResponse<ReadSleepDetailsRsp> {
-                    override fun onDataResponse(resultEntity: ReadSleepDetailsRsp) {
-                        try {
-                            addLog("Direct command response received - Status: ${resultEntity.status}")
-                            addLog("Response details count: ${resultEntity.bleSleepDetailses.size}")
-                            
-                            if (resultEntity.status == BaseRspCmd.RESULT_OK && resultEntity.bleSleepDetailses.isNotEmpty()) {
-                                addLog("Raw sleep data found - Count: ${resultEntity.bleSleepDetailses.size}")
-                                
-                                // Log first few sleep details for debugging
-                                resultEntity.bleSleepDetailses.take(3).forEachIndexed { index, detail ->
-                                    addLog("Sleep detail $index: year=${detail.year}, month=${detail.month}, day=${detail.day}, timeIndex=${detail.timeIndex}, qualities=${detail.sleepQualities?.size ?: 0} entries")
-                                }
-                                
-                                // Process raw sleep data
-                                val sleepData = processRawSleepData(resultEntity, dayOffset)
-                                sleepDataCallback?.invoke(sleepData)
-                                
-                            } else {
-                                addLog("No sleep data available for offset: $dayOffset (status: ${resultEntity.status})")
-                                addLog("Response status details: ${resultEntity.status}")
-                                
-                                // Try SleepAnalyzerUtils as final fallback
-                                addLog("Trying SleepAnalyzerUtils as final fallback...")
-                                trySleepAnalyzerUtilsFallback(deviceAddress, dayOffset)
-                            }
-                            
-                        } catch (e: Exception) {
-                            addLog("ERROR: Processing direct command response: ${e.message}")
-                            Log.e(TAG, "Direct command response error", e)
-                        }
-                    }
-                }
-            )
-        } catch (e: Exception) {
-            addLog("ERROR: Direct command approach failed: ${e.message}")
-            Log.e(TAG, "Direct command error", e)
-        }
-    }
+//    private fun tryDirectCommandApproach(deviceAddress: String, dayOffset: Int) {
+//        try {
+//            addLog("Using direct command approach for day offset: $dayOffset")
+//
+//            commandHandle?.executeReqCmd(
+//                ReadSleepDetailsReq(dayOffset, 0, 95),
+//                object : ICommandResponse<ReadSleepDetailsRsp> {
+//                    override fun onDataResponse(resultEntity: ReadSleepDetailsRsp) {
+//                        try {
+//                            addLog("Direct command response received - Status: ${resultEntity.status}")
+//                            addLog("Response details count: ${resultEntity.bleSleepDetailses.size}")
+//
+//                            if (resultEntity.status == BaseRspCmd.RESULT_OK && resultEntity.bleSleepDetailses.isNotEmpty()) {
+//                                addLog("Raw sleep data found - Count: ${resultEntity.bleSleepDetailses.size}")
+//
+//                                // Log first few sleep details for debugging
+//                                resultEntity.bleSleepDetailses.take(3).forEachIndexed { index, detail ->
+//                                    addLog("Sleep detail $index: year=${detail.year}, month=${detail.month}, day=${detail.day}, timeIndex=${detail.timeIndex}, qualities=${detail.sleepQualities?.size ?: 0} entries")
+//                                }
+//
+//                                // Process raw sleep data
+//                                val sleepData = processRawSleepData(resultEntity, dayOffset)
+//                                sleepDataCallback?.invoke(sleepData)
+//
+//                            } else {
+//                                addLog("No sleep data available for offset: $dayOffset (status: ${resultEntity.status})")
+//                                addLog("Response status details: ${resultEntity.status}")
+//
+//                                // Try SleepAnalyzerUtils as final fallback
+//                                addLog("Trying SleepAnalyzerUtils as final fallback...")
+//                                trySleepAnalyzerUtilsFallback(deviceAddress, dayOffset)
+//                            }
+//
+//                        } catch (e: Exception) {
+//                            addLog("ERROR: Processing direct command response: ${e.message}")
+//                            Log.e(TAG, "Direct command response error", e)
+//                        }
+//                    }
+//                }
+//            )
+//        } catch (e: Exception) {
+//            addLog("ERROR: Direct command approach failed: ${e.message}")
+//            Log.e(TAG, "Direct command error", e)
+//        }
+//    }
 
     /**
      * Final fallback using SleepAnalyzerUtils
      */
-    private fun trySleepAnalyzerUtilsFallback(deviceAddress: String, dayOffset: Int) {
-        try {
-            addLog("Trying SleepAnalyzerUtils as final fallback for offset: $dayOffset")
-            
-            SleepAnalyzerUtils.getInstance().syncSleepReturnSleepDisplay(
-                deviceAddress,
-                dayOffset,
-                object : ISleepCallback {
-                    override fun sleepDisplay(sleepDisplay: SleepDisplay?) {
-                        try {
-                            if (sleepDisplay == null) {
-                                addLog("SleepAnalyzerUtils also returned null data for offset: $dayOffset")
-                                val emptySleepData = createEmptySleepData(dayOffset)
-                                sleepDataCallback?.invoke(emptySleepData)
-                                return
-                            }
-                            
-                            addLog("SleepAnalyzerUtils data received - Total: ${sleepDisplay.totalSleepDuration}s")
-                            
-                            // Convert SDK data to our data class
-                            val sleepData = convertSleepDisplayToSleepData(sleepDisplay, dayOffset)
-                            
-                            // Notify callback
-                            sleepDataCallback?.invoke(sleepData)
-                            
-                            addLog("SleepAnalyzerUtils data processed successfully for day offset: $dayOffset")
-                            
-                        } catch (e: Exception) {
-                            addLog("ERROR: SleepAnalyzerUtils processing failed: ${e.message}")
-                            Log.e(TAG, "SleepAnalyzerUtils processing error", e)
-                            
-                            // Create empty sleep data as final fallback
-                            val emptySleepData = createEmptySleepData(dayOffset)
-                            sleepDataCallback?.invoke(emptySleepData)
-                        }
-                    }
-                }
-            )
-        } catch (e: Exception) {
-            addLog("ERROR: Exception with SleepAnalyzerUtils fallback: ${e.message}")
-            Log.e(TAG, "SleepAnalyzerUtils fallback error", e)
-            
-            // Create empty sleep data as final fallback
-            val emptySleepData = createEmptySleepData(dayOffset)
-            sleepDataCallback?.invoke(emptySleepData)
-        }
-    }
+//    private fun trySleepAnalyzerUtilsFallback(deviceAddress: String, dayOffset: Int) {
+//        try {
+//            addLog("Trying SleepAnalyzerUtils as final fallback for offset: $dayOffset")
+//
+//            SleepAnalyzerUtils.getInstance().syncSleepReturnSleepDisplay(
+//                deviceAddress,
+//                dayOffset,
+//                object : ISleepCallback {
+//                    override fun sleepDisplay(sleepDisplay: SleepDisplay?) {
+//                        try {
+//                            if (sleepDisplay == null) {
+//                                addLog("SleepAnalyzerUtils also returned null data for offset: $dayOffset")
+//                                val emptySleepData = createEmptySleepData(dayOffset)
+//                                sleepDataCallback?.invoke(emptySleepData)
+//                                return
+//                            }
+//
+//                            addLog("SleepAnalyzerUtils data received - Total: ${sleepDisplay.totalSleepDuration}s")
+//
+//                            // Convert SDK data to our data class
+//                            val sleepData = convertSleepDisplayToSleepData(sleepDisplay, dayOffset)
+//
+//                            // Notify callback
+//                            sleepDataCallback?.invoke(sleepData)
+//
+//                            addLog("SleepAnalyzerUtils data processed successfully for day offset: $dayOffset")
+//
+//                        } catch (e: Exception) {
+//                            addLog("ERROR: SleepAnalyzerUtils processing failed: ${e.message}")
+//                            Log.e(TAG, "SleepAnalyzerUtils processing error", e)
+//
+//                            // Create empty sleep data as final fallback
+//                            val emptySleepData = createEmptySleepData(dayOffset)
+//                            sleepDataCallback?.invoke(emptySleepData)
+//                        }
+//                    }
+//                }
+//            )
+//        } catch (e: Exception) {
+//            addLog("ERROR: Exception with SleepAnalyzerUtils fallback: ${e.message}")
+//            Log.e(TAG, "SleepAnalyzerUtils fallback error", e)
+//
+//            // Create empty sleep data as final fallback
+//            val emptySleepData = createEmptySleepData(dayOffset)
+//            sleepDataCallback?.invoke(emptySleepData)
+//        }
+//    }
 
 
     /**
@@ -377,55 +391,55 @@ class DataSynchronization(
     /**
      * Convert SleepDisplay from SDK to our SleepData class
      */
-    private fun convertSleepDisplayToSleepData(sleepDisplay: SleepDisplay, dayOffset: Int): SleepData {
-        val date = getDateForOffset(dayOffset)
-        
-        // Convert sleep stages from SDK format
-        val sleepStages = mutableListOf<SleepStage>()
-        sleepDisplay.list?.forEach { sleepDataBean ->
-            val stageType = when (sleepDataBean.type) {
-                1 -> SleepType.DEEP
-                2 -> SleepType.LIGHT
-                3 -> SleepType.AWAKE
-                else -> SleepType.LIGHT
-            }
-            
-            sleepStages.add(
-                SleepStage(
-                    timestamp = sleepDataBean.sleepStart.toLong(),
-                    type = stageType,
-                    duration = ((sleepDataBean.sleepEnd - sleepDataBean.sleepStart) / 60).toInt()
-                )
-            )
-        }
-
-        // Get durations from SDK
-        val totalDuration = sleepDisplay.totalSleepDuration.toLong()
-        val deepDuration = sleepDisplay.deepSleepDuration.toLong()
-        val lightDuration = sleepDisplay.shallowSleepDuration.toLong()
-        val awakeDuration = sleepDisplay.awakeDuration.toLong()
-        val remDuration = sleepDisplay.rapidDuration.toLong()
-        
-        // Calculate sleep metrics
-        val sleepScore = calculateSleepScore(totalDuration, deepDuration, lightDuration)
-        val sleepEfficiency = calculateSleepEfficiency(totalDuration, deepDuration, lightDuration)
-        val sleepQuality = getSleepQuality(sleepScore)
-
-        return SleepData(
-            date = date,
-            totalDuration = totalDuration,
-            deepSleepDuration = deepDuration,
-            lightSleepDuration = lightDuration,
-            remDuration = remDuration,
-            awakeDuration = awakeDuration,
-            sleepTime = formatTimestampToTime(sleepDisplay.sleepTime),
-            wakeTime = formatTimestampToTime(sleepDisplay.wakeTime),
-            sleepScore = sleepScore,
-            sleepEfficiency = sleepEfficiency,
-            sleepQuality = sleepQuality,
-            sleepStages = sleepStages
-        )
-    }
+//    private fun convertSleepDisplayToSleepData(sleepDisplay: SleepDisplay, dayOffset: Int): SleepData {
+//        val date = getDateForOffset(dayOffset)
+//
+//        // Convert sleep stages from SDK format
+//        val sleepStages = mutableListOf<SleepStage>()
+//        sleepDisplay.list?.forEach { sleepDataBean ->
+//            val stageType = when (sleepDataBean.type) {
+//                1 -> SleepType.DEEP
+//                2 -> SleepType.LIGHT
+//                3 -> SleepType.AWAKE
+//                else -> SleepType.LIGHT
+//            }
+//
+//            sleepStages.add(
+//                SleepStage(
+//                    timestamp = sleepDataBean.sleepStart.toLong(),
+//                    type = stageType,
+//                    duration = ((sleepDataBean.sleepEnd - sleepDataBean.sleepStart) / 60).toInt()
+//                )
+//            )
+//        }
+//
+//        // Get durations from SDK
+//        val totalDuration = sleepDisplay.totalSleepDuration.toLong()
+//        val deepDuration = sleepDisplay.deepSleepDuration.toLong()
+//        val lightDuration = sleepDisplay.shallowSleepDuration.toLong()
+//        val awakeDuration = sleepDisplay.awakeDuration.toLong()
+//        val remDuration = sleepDisplay.rapidDuration.toLong()
+//
+//        // Calculate sleep metrics
+//        val sleepScore = calculateSleepScore(totalDuration, deepDuration, lightDuration)
+//        val sleepEfficiency = calculateSleepEfficiency(totalDuration, deepDuration, lightDuration)
+//        val sleepQuality = getSleepQuality(sleepScore)
+//
+//        return SleepData(
+//            date = date,
+//            totalDuration = totalDuration,
+//            deepSleepDuration = deepDuration,
+//            lightSleepDuration = lightDuration,
+//            remDuration = remDuration,
+//            awakeDuration = awakeDuration,
+//            sleepTime = formatTimestampToTime(sleepDisplay.sleepTime),
+//            wakeTime = formatTimestampToTime(sleepDisplay.wakeTime),
+//            sleepScore = sleepScore,
+//            sleepEfficiency = sleepEfficiency,
+//            sleepQuality = sleepQuality,
+//            sleepStages = sleepStages
+//        )
+//    }
 
 
     /**
@@ -583,81 +597,81 @@ class DataSynchronization(
     /**
      * Process raw sleep data from direct command response
      */
-    private fun processRawSleepData(response: ReadSleepDetailsRsp, dayOffset: Int): SleepData {
-        try {
-            addLog("Processing raw sleep data for offset: $dayOffset")
-            
-            // Calculate totals from raw sleep details
-            var totalDuration = 0L
-            var deepDuration = 0L
-            var lightDuration = 0L
-            var awakeDuration = 0L
-            var remDuration = 0L
-            
-            val sleepStages = mutableListOf<SleepStage>()
-            
-            response.bleSleepDetailses.forEach { detail ->
-                addLog("Processing sleep detail: ${detail.toString()}")
-                
-                // Process sleep qualities array (each element represents a time period)
-                detail.sleepQualities?.forEachIndexed { index, quality ->
-                    val duration = 1L // Each quality represents 1 minute
-                    totalDuration += duration
-                    
-                    val stageType = when (quality) {
-                        1 -> {
-                            deepDuration += duration
-                            SleepType.DEEP
-                        }
-                        2 -> {
-                            lightDuration += duration
-                            SleepType.LIGHT
-                        }
-                        3 -> {
-                            awakeDuration += duration
-                            SleepType.AWAKE
-                        }
-                        else -> SleepType.LIGHT
-                    }
-                    
-                    sleepStages.add(
-                        SleepStage(
-                            timestamp = (detail.timeIndex + index).toLong(),
-                            type = stageType,
-                            duration = 1 // 1 minute per quality entry
-                        )
-                    )
-                }
-            }
-            
-            // Calculate sleep metrics
-            val sleepScore = calculateSleepScore(totalDuration, deepDuration, lightDuration)
-            val sleepEfficiency = calculateSleepEfficiency(totalDuration, deepDuration, lightDuration)
-            val sleepQuality = getSleepQuality(sleepScore)
-            
-            val date = getDateForOffset(dayOffset)
-            
-            return SleepData(
-                date = date,
-                totalDuration = totalDuration,
-                deepSleepDuration = deepDuration,
-                lightSleepDuration = lightDuration,
-                remDuration = remDuration,
-                awakeDuration = awakeDuration,
-                sleepTime = formatTimestampToTime(response.bleSleepDetailses.firstOrNull()?.timeIndex ?: 0),
-                wakeTime = formatTimestampToTime((response.bleSleepDetailses.lastOrNull()?.timeIndex ?: 0) + (response.bleSleepDetailses.lastOrNull()?.sleepQualities?.size ?: 0)),
-                sleepScore = sleepScore,
-                sleepEfficiency = sleepEfficiency,
-                sleepQuality = sleepQuality,
-                sleepStages = sleepStages
-            )
-            
-        } catch (e: Exception) {
-            addLog("ERROR: Processing raw sleep data failed: ${e.message}")
-            Log.e(TAG, "Raw sleep data processing error", e)
-            return createEmptySleepData(dayOffset)
-        }
-    }
+//    private fun processRawSleepData(response: ReadSleepDetailsRsp, dayOffset: Int): SleepData {
+//        try {
+//            addLog("Processing raw sleep data for offset: $dayOffset")
+//
+//            // Calculate totals from raw sleep details
+//            var totalDuration = 0L
+//            var deepDuration = 0L
+//            var lightDuration = 0L
+//            var awakeDuration = 0L
+//            var remDuration = 0L
+//
+//            val sleepStages = mutableListOf<SleepStage>()
+//
+//            response.bleSleepDetailses.forEach { detail ->
+//                addLog("Processing sleep detail: ${detail.toString()}")
+//
+//                // Process sleep qualities array (each element represents a time period)
+//                detail.sleepQualities?.forEachIndexed { index, quality ->
+//                    val duration = 1L // Each quality represents 1 minute
+//                    totalDuration += duration
+//
+//                    val stageType = when (quality) {
+//                        1 -> {
+//                            deepDuration += duration
+//                            SleepType.DEEP
+//                        }
+//                        2 -> {
+//                            lightDuration += duration
+//                            SleepType.LIGHT
+//                        }
+//                        3 -> {
+//                            awakeDuration += duration
+//                            SleepType.AWAKE
+//                        }
+//                        else -> SleepType.LIGHT
+//                    }
+//
+//                    sleepStages.add(
+//                        SleepStage(
+//                            timestamp = (detail.timeIndex + index).toLong(),
+//                            type = stageType,
+//                            duration = 1 // 1 minute per quality entry
+//                        )
+//                    )
+//                }
+//            }
+//
+//            // Calculate sleep metrics
+//            val sleepScore = calculateSleepScore(totalDuration, deepDuration, lightDuration)
+//            val sleepEfficiency = calculateSleepEfficiency(totalDuration, deepDuration, lightDuration)
+//            val sleepQuality = getSleepQuality(sleepScore)
+//
+//            val date = getDateForOffset(dayOffset)
+//
+//            return SleepData(
+//                date = date,
+//                totalDuration = totalDuration,
+//                deepSleepDuration = deepDuration,
+//                lightSleepDuration = lightDuration,
+//                remDuration = remDuration,
+//                awakeDuration = awakeDuration,
+//                sleepTime = formatTimestampToTime(response.bleSleepDetailses.firstOrNull()?.timeIndex ?: 0),
+//                wakeTime = formatTimestampToTime((response.bleSleepDetailses.lastOrNull()?.timeIndex ?: 0) + (response.bleSleepDetailses.lastOrNull()?.sleepQualities?.size ?: 0)),
+//                sleepScore = sleepScore,
+//                sleepEfficiency = sleepEfficiency,
+//                sleepQuality = sleepQuality,
+//                sleepStages = sleepStages
+//            )
+//
+//        } catch (e: Exception) {
+//            addLog("ERROR: Processing raw sleep data failed: ${e.message}")
+//            Log.e(TAG, "Raw sleep data processing error", e)
+//            return createEmptySleepData(dayOffset)
+//        }
+//    }
 
     /**
      * Create empty sleep data when no data is available
@@ -667,17 +681,16 @@ class DataSynchronization(
         
         return SleepData(
             date = date,
-            totalDuration = 0L,
-            deepSleepDuration = 0L,
-            lightSleepDuration = 0L,
-            remDuration = 0L,
-            awakeDuration = 0L,
-            sleepTime = "00:00",
-            wakeTime = "00:00",
+            awakeDuration = 0,
             sleepScore = 0,
-            sleepEfficiency = 0,
-            sleepQuality = "No Data",
-            sleepStages = emptyList()
+            sleepEfficiency = 0.0,
+            deepSleep = 0,
+            lightSleep = 0,
+            remSleep = 0,
+            sleepStartTime = "",
+            sleepEndTime = "",
+            stages = emptyList(),
+            totalDuration = 0.0
         )
     }
 

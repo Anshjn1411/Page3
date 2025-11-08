@@ -78,9 +78,10 @@ fun CategoryScreen(
 
     val productsState by productViewModel.productsState.collectAsState()
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(CategoryId) {
         productViewModel.loadProductsByCategory(categoryId = CategoryId)
     }
+    val totalitem by cartViewModel.totalItems.collectAsState()
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -100,7 +101,8 @@ fun CategoryScreen(
             topBar = {
                 TopBarScreen(
                     onClickMenu = { scope.launch { drawerState.open() } },
-                    onClickShop = { navigator.push(CartScreenNav()) }
+                    onClickShop = { navigator.push(CartScreenNav()) },
+                    totalitem
                 )
             },
             bottomBar = {

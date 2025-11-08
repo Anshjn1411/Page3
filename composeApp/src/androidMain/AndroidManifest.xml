@@ -56,30 +56,12 @@
         
         <!-- Bluetooth Auto-Connect Service -->
         <service
-            android:name=".connection.BackgroundConnectionService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="connectedDevice" />
-        <service
-            android:name=".bluetooth.StableConnectionService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="connectedDevice" />
+        android:name=".connection.BleConnectionService"
+        android:enabled="true"
+        android:exported="false"
+        android:foregroundServiceType="connectedDevice" />
         
         <!-- Bluetooth Receiver -->
-        <receiver
-            android:name=".bluetooth.BluetoothReceiver"
-            android:enabled="true"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.bluetooth.adapter.action.STATE_CHANGED" />
-                <action android:name="android.bluetooth.device.action.FOUND" />
-                <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
-                <action android:name="android.bluetooth.device.action.ACL_DISCONNECTED" />
-                <action android:name="android.bluetooth.adapter.action.DISCOVERY_STARTED" />
-                <action android:name="android.bluetooth.adapter.action.DISCOVERY_FINISHED" />
-            </intent-filter>
-        </receiver>
 
     </application>
 

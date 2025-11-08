@@ -13,7 +13,8 @@ import kotlinx.coroutines.withContext
 class AuthViewModel(
     private val repository: AuthRepository,
     private val userRepository: UserRepository = UserRepository()
-) {
+)
+{
     private val viewModelScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)

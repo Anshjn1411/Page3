@@ -3,78 +3,78 @@ package dev.infa.page3.viewmodels
 import java.text.SimpleDateFormat
 import java.util.*
 
-data class SleepData(
-    val date: String = "",                    // Date in format "yyyy-MM-dd"
-    val totalDuration: Long = 0,              // Total sleep in seconds
-    val deepSleepDuration: Long = 0,          // Deep sleep in seconds
-    val lightSleepDuration: Long = 0,         // Light sleep in seconds
-    val remDuration: Long = 0,                // REM sleep in seconds
-    val awakeDuration: Long = 0,              // Awake time in seconds
-    val sleepTime: String = "",               // Sleep start time "HH:mm"
-    val wakeTime: String = "",                // Wake up time "HH:mm"
-    val sleepScore: Int = 0,                  // Sleep quality score (0-100)
-    val sleepEfficiency: Int = 0,             // Sleep efficiency percentage
-    val sleepQuality: String = "",            // Quality text: "Good", "Fair", "Poor"
-    val sleepStages: List<SleepStage> = emptyList() // Detailed sleep stages
-) {
-    /**
-     * Convert total duration from seconds to formatted time
-     */
-    fun getFormattedDuration(): String {
-        val hours = totalDuration / 3600
-        val minutes = (totalDuration % 3600) / 60
-        return "${hours}h ${minutes}m"
-    }
-
-    /**
-     * Get deep sleep duration in minutes
-     */
-    fun getDeepSleepMinutes(): Int = (deepSleepDuration / 60).toInt()
-
-    /**
-     * Get light sleep duration in minutes
-     */
-    fun getLightSleepMinutes(): Int = (lightSleepDuration / 60).toInt()
-
-    /**
-     * Get REM duration in minutes
-     */
-    fun getRemMinutes(): Int = (remDuration / 60).toInt()
-
-    /**
-     * Get awake duration in minutes
-     */
-    fun getAwakeMinutes(): Int = (awakeDuration / 60).toInt()
-
-    /**
-     * Get sleep efficiency percentage
-     */
-    fun getSleepEfficiencyPercentage(): Int = sleepEfficiency
-
-}
-
-/**
- * Data class for individual sleep stages throughout the night
- */
-data class SleepStage(
-    val timestamp: Long = 0,                  // Unix timestamp
-    val type: SleepType = SleepType.LIGHT,    // Type of sleep stage
-    val duration: Int = 0                     // Duration in minutes
-)
-
-/**
- * Enum for sleep stage types based on SDK documentation
- */
-enum class SleepType {
-    DEEP,           // Deep sleep (type 1 in SDK)
-    LIGHT,          // Light sleep (type 2 in SDK)
-    REM,            // Rapid Eye Movement (derived)
-    AWAKE           // Wake up periods (type 3 in SDK)
-}
-
-/**
- * Step data class for daily step tracking
- */
+//data class SleepData(
+//    val date: String = "",                    // Date in format "yyyy-MM-dd"
+//    val totalDuration: Long = 0,              // Total sleep in seconds
+//    val deepSleepDuration: Long = 0,          // Deep sleep in seconds
+//    val lightSleepDuration: Long = 0,         // Light sleep in seconds
+//    val remDuration: Long = 0,                // REM sleep in seconds
+//    val awakeDuration: Long = 0,              // Awake time in seconds
+//    val sleepTime: String = "",               // Sleep start time "HH:mm"
+//    val wakeTime: String = "",                // Wake up time "HH:mm"
+//    val sleepScore: Int = 0,                  // Sleep quality score (0-100)
+//    val sleepEfficiency: Int = 0,             // Sleep efficiency percentage
+//    val sleepQuality: String = "",            // Quality text: "Good", "Fair", "Poor"
+//    val sleepStages: List<SleepStage> = emptyList() // Detailed sleep stages
+//) {
+//    /**
+//     * Convert total duration from seconds to formatted time
+//     */
+//    fun getFormattedDuration(): String {
+//        val hours = totalDuration / 3600
+//        val minutes = (totalDuration % 3600) / 60
+//        return "${hours}h ${minutes}m"
+//    }
+//
+//    /**
+//     * Get deep sleep duration in minutes
+//     */
+//    fun getDeepSleepMinutes(): Int = (deepSleepDuration / 60).toInt()
+//
+//    /**
+//     * Get light sleep duration in minutes
+//     */
+//    fun getLightSleepMinutes(): Int = (lightSleepDuration / 60).toInt()
+//
+//    /**
+//     * Get REM duration in minutes
+//     */
+//    fun getRemMinutes(): Int = (remDuration / 60).toInt()
+//
+//    /**
+//     * Get awake duration in minutes
+//     */
+//    fun getAwakeMinutes(): Int = (awakeDuration / 60).toInt()
+//
+//    /**
+//     * Get sleep efficiency percentage
+//     */
+//    fun getSleepEfficiencyPercentage(): Int = sleepEfficiency
+//
+//}
+//
+///**
+// * Data class for individual sleep stages throughout the night
+// */
+//data class SleepStage(
+//    val timestamp: Long = 0,                  // Unix timestamp
+//    val type: SleepType = SleepType.LIGHT,    // Type of sleep stage
+//    val duration: Int = 0                     // Duration in minutes
+//)
+//
+///**
+// * Enum for sleep stage types based on SDK documentation
+// */
+//enum class SleepType {
+//    DEEP,           // Deep sleep (type 1 in SDK)
+//    LIGHT,          // Light sleep (type 2 in SDK)
+//    REM,            // Rapid Eye Movement (derived)
+//    AWAKE           // Wake up periods (type 3 in SDK)
+//}
+//
+///**
+// * Step data class for daily step tracking
+// */
 data class StepData(
     val date: String = "",                    // Date in format "yyyy-MM-dd"
     val totalSteps: Long = 0,                 // Total steps

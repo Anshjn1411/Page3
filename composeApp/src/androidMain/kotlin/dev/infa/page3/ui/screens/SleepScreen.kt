@@ -33,7 +33,6 @@ import dev.infa.page3.ui.components.TopBarScreen
 import dev.infa.page3.viewmodels.SleepData
 import dev.infa.page3.viewmodels.SleepUiState
 import dev.infa.page3.viewmodels.SleepViewModel
-import dev.infa.page3.viewmodels.SleepType
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -96,11 +95,11 @@ fun SleepScreen(
                     is SleepUiState.Success -> {
                         val sleepData = viewModel.getSleepDataForSelectedDate()
                         if (sleepData != null) {
-                            if (sleepData.sleepQuality == "No Data") {
-                                NoDataContent()
-                            } else {
-                                SimpleSleepContent(sleepData)
-                            }
+//                            if (sleepData.sleepEfficiency == "No Data") {
+//                                NoDataContent()
+//                            } else {
+//                                SimpleSleepContent(sleepData)
+//                            }
                         } else {
                             EmptyContent()
                         }
@@ -269,16 +268,16 @@ fun SimpleSleepContent(sleepData: SleepData) {
                 ) {
                     Column {
                         Text("Total Sleep", fontSize = 14.sp, color = Color.Gray)
-                        Text(
-                            text = sleepData.getFormattedDuration(),
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "${sleepData.sleepTime} - ${sleepData.wakeTime}",
-                            fontSize = 12.sp,
-                            color = Color.Gray
-                        )
+//                        Text(
+//                            text = sleepData.getFormattedDuration(),
+//                            fontSize = 28.sp,
+//                            fontWeight = FontWeight.Bold
+//                        )
+//                        Text(
+//                            text = "${sleepData.sleepTime} - ${sleepData.wakeTime}",
+//                            fontSize = 12.sp,
+//                            color = Color.Gray
+//                        )
                     }
 
                     // Sleep Score
@@ -300,10 +299,10 @@ fun SimpleSleepContent(sleepData: SleepData) {
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    SimpleMetricCard(
-                        value = sleepData.sleepQuality,
-                        label = "Quality"
-                    )
+//                    SimpleMetricCard(
+//                        value = sleepData.sleepQuality,
+//                        label = "Quality"
+//                    )
                     SimpleMetricCard(
                         value = "${sleepData.sleepEfficiency}%",
                         label = "Efficiency"
@@ -326,32 +325,32 @@ fun SimpleSleepContent(sleepData: SleepData) {
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // Deep Sleep
-                SleepStageRow(
-                    label = "Deep Sleep",
-                    duration = sleepData.getDeepSleepMinutes(),
-                    color = Color(0xFF7E57C2)
-                )
-
-                // Light Sleep
-                SleepStageRow(
-                    label = "Light Sleep",
-                    duration = sleepData.getLightSleepMinutes(),
-                    color = Color(0xFFB39DDB)
-                )
-
-                // REM Sleep
-                SleepStageRow(
-                    label = "REM Sleep",
-                    duration = sleepData.getRemMinutes(),
-                    color = Color(0xFFE1BEE7)
-                )
-
-                // Awake
-                SleepStageRow(
-                    label = "Awake",
-                    duration = sleepData.getAwakeMinutes(),
-                    color = Color(0xFFFFE082)
-                )
+//                SleepStageRow(
+//                    label = "Deep Sleep",
+//                    duration = sleepData.getDeepSleepMinutes(),
+//                    color = Color(0xFF7E57C2)
+//                )
+//
+//                // Light Sleep
+//                SleepStageRow(
+//                    label = "Light Sleep",
+//                    duration = sleepData.getLightSleepMinutes(),
+//                    color = Color(0xFFB39DDB)
+//                )
+//
+//                // REM Sleep
+//                SleepStageRow(
+//                    label = "REM Sleep",
+//                    duration = sleepData.getRemMinutes(),
+//                    color = Color(0xFFE1BEE7)
+//                )
+//
+//                // Awake
+//                SleepStageRow(
+//                    label = "Awake",
+//                    duration = sleepData.getAwakeMinutes(),
+//                    color = Color(0xFFFFE082)
+//                )
             }
         }
     }
@@ -446,19 +445,19 @@ fun SleepStagesChart(sleepData: SleepData) {
                 verticalAlignment = Alignment.Bottom
             ) {
                 // Generate chart bars based on sleep stages
-                val chartBars = generateSleepChartBars(sleepData.sleepStages)
-                
-                chartBars.forEach { bar ->
-                    Box(
-                        modifier = Modifier
-                            .width(8.dp)
-                            .height(bar.height.dp)
-                            .background(
-                                bar.color,
-                                RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)
-                            )
-                    )
-                }
+//                val chartBars = generateSleepChartBars(sleepData.stages)
+//
+//                chartBars.forEach { bar ->
+//                    Box(
+//                        modifier = Modifier
+//                            .width(8.dp)
+//                            .height(bar.height.dp)
+//                            .background(
+//                                bar.color,
+//                                RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)
+//                            )
+//                    )
+//                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -468,8 +467,7 @@ fun SleepStagesChart(sleepData: SleepData) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(sleepData.sleepTime, fontSize = 12.sp, color = Color.Gray)
-                Text(sleepData.wakeTime, fontSize = 12.sp, color = Color.Gray)
+                Text(sleepData.totalDuration.toString(), fontSize = 12.sp, color = Color.Gray)
             }
         }
     }
@@ -487,41 +485,41 @@ fun LegendItem(label: String, color: Color) {
         Text(label, fontSize = 10.sp, color = Color.Gray)
     }
 }
-
-@Composable
-fun SleepDetailsCard(sleepData: SleepData) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5))
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // Calculate percentages
-            val awakePercentage = if (sleepData.totalDuration > 0) {
-                ((sleepData.awakeDuration.toFloat() / sleepData.totalDuration) * 100).toInt()
-            } else 0
-            
-            val remPercentage = if (sleepData.totalDuration > 0) {
-                ((sleepData.remDuration.toFloat() / sleepData.totalDuration) * 100).toInt()
-            } else 0
-            
-            val lightSleepPercentage = if (sleepData.totalDuration > 0) {
-                ((sleepData.lightSleepDuration.toFloat() / sleepData.totalDuration) * 100).toInt()
-            } else 0
-            
-            val deepSleepPercentage = if (sleepData.totalDuration > 0) {
-                ((sleepData.deepSleepDuration.toFloat() / sleepData.totalDuration) * 100).toInt()
-            } else 0
-
-            DetailRow("Total awake time", "${sleepData.getAwakeMinutes()}M", "${awakePercentage}%")
-            Divider(modifier = Modifier.padding(vertical = 8.dp))
-            DetailRow("Rapid eye movement duration", "${sleepData.getRemMinutes()}M", "${remPercentage}%")
-            Divider(modifier = Modifier.padding(vertical = 8.dp))
-            DetailRow("Total light sleep duration", "${sleepData.getLightSleepMinutes()}M", "${lightSleepPercentage}%")
-            Divider(modifier = Modifier.padding(vertical = 8.dp))
-            DetailRow("Total deep sleep duration", "${sleepData.getDeepSleepMinutes()}M", "${deepSleepPercentage}%")
-        }
-    }
-}
+//
+//@Composable
+//fun SleepDetailsCard(sleepData: SleepData) {
+//    Card(
+//        modifier = Modifier.fillMaxWidth(),
+//        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5))
+//    ) {
+//        Column(modifier = Modifier.padding(16.dp)) {
+//            // Calculate percentages
+//            val awakePercentage = if (sleepData.totalDuration > 0) {
+//                ((sleepData.awakeDuration.toFloat() / sleepData.totalDuration) * 100).toInt()
+//            } else 0
+//
+//            val remPercentage = if (sleepData.totalDuration > 0) {
+//                ((sleepData.remDuration.toFloat() / sleepData.totalDuration) * 100).toInt()
+//            } else 0
+//
+//            val lightSleepPercentage = if (sleepData.totalDuration > 0) {
+//                ((sleepData.lightSleepDuration.toFloat() / sleepData.totalDuration) * 100).toInt()
+//            } else 0
+//
+//            val deepSleepPercentage = if (sleepData.totalDuration > 0) {
+//                ((sleepData.deepSleepDuration.toFloat() / sleepData.totalDuration) * 100).toInt()
+//            } else 0
+//
+//            DetailRow("Total awake time", "${sleepData.getAwakeMinutes()}M", "${awakePercentage}%")
+//            Divider(modifier = Modifier.padding(vertical = 8.dp))
+//            DetailRow("Rapid eye movement duration", "${sleepData.getRemMinutes()}M", "${remPercentage}%")
+//            Divider(modifier = Modifier.padding(vertical = 8.dp))
+//            DetailRow("Total light sleep duration", "${sleepData.getLightSleepMinutes()}M", "${lightSleepPercentage}%")
+//            Divider(modifier = Modifier.padding(vertical = 8.dp))
+//            DetailRow("Total deep sleep duration", "${sleepData.getDeepSleepMinutes()}M", "${deepSleepPercentage}%")
+//        }
+//    }
+//}
 
 @Composable
 fun DetailRow(label: String, value: String, percentage: String) {
@@ -669,61 +667,61 @@ data class SleepChartBar(
 /**
  * Generate sleep chart bars from sleep stages data
  */
-private fun generateSleepChartBars(sleepStages: List<dev.infa.page3.viewmodels.SleepStage>): List<SleepChartBar> {
-    // If no sleep stages data, generate sample data
-    if (sleepStages.isEmpty()) {
-        return (0..23).map { index ->
-            val height = (50..180).random()
-            val color = when (index % 4) {
-                0 -> Color(0xFF7E57C2) // Deep sleep
-                1 -> Color(0xFFB39DDB) // Light sleep
-                2 -> Color(0xFFE1BEE7) // REM
-                else -> Color(0xFFFFE082) // Awake
-            }
-            SleepChartBar(height, color)
-        }
-    }
-
-    // Convert sleep stages to chart bars (24 bars for 24 hours)
-    val bars = mutableListOf<SleepChartBar>()
-    
-    for (hour in 0..23) {
-        // Find sleep stages that overlap with this hour
-        val hourStart = hour * 3600 // Convert to seconds
-        val hourEnd = (hour + 1) * 3600
-        
-        val stagesInHour = sleepStages.filter { stage ->
-            val stageEnd = stage.timestamp + (stage.duration * 60) // Convert duration to seconds
-            stage.timestamp < hourEnd && stageEnd > hourStart
-        }
-        
-        // Determine the predominant sleep type for this hour
-        val predominantType = if (stagesInHour.isNotEmpty()) {
-            stagesInHour.maxByOrNull { it.duration }?.type ?: SleepType.LIGHT
-        } else {
-            SleepType.LIGHT // Default to light sleep if no data
-        }
-        
-        val color = when (predominantType) {
-            SleepType.DEEP -> Color(0xFF7E57C2)
-            SleepType.LIGHT -> Color(0xFFB39DDB)
-            SleepType.REM -> Color(0xFFE1BEE7)
-            SleepType.AWAKE -> Color(0xFFFFE082)
-        }
-        
-        // Calculate height based on sleep quality (simplified)
-        val height = when (predominantType) {
-            SleepType.DEEP -> (150..180).random()
-            SleepType.LIGHT -> (100..150).random()
-            SleepType.REM -> (80..120).random()
-            SleepType.AWAKE -> (30..80).random()
-        }
-        
-        bars.add(SleepChartBar(height, color))
-    }
-    
-    return bars
-}
+//private fun generateSleepChartBars(sleepStages: List<dev.infa.page3.viewmodels.SleepStage>): List<SleepChartBar> {
+//    // If no sleep stages data, generate sample data
+//    if (sleepStages.isEmpty()) {
+//        return (0..23).map { index ->
+//            val height = (50..180).random()
+//            val color = when (index % 4) {
+//                0 -> Color(0xFF7E57C2) // Deep sleep
+//                1 -> Color(0xFFB39DDB) // Light sleep
+//                2 -> Color(0xFFE1BEE7) // REM
+//                else -> Color(0xFFFFE082) // Awake
+//            }
+//            SleepChartBar(height, color)
+//        }
+//    }
+//
+//    // Convert sleep stages to chart bars (24 bars for 24 hours)
+//    val bars = mutableListOf<SleepChartBar>()
+//
+//    for (hour in 0..23) {
+//        // Find sleep stages that overlap with this hour
+//        val hourStart = hour * 3600 // Convert to seconds
+//        val hourEnd = (hour + 1) * 3600
+//
+//        val stagesInHour = sleepStages.filter { stage ->
+//            val stageEnd = stage.timestamp + (stage.duration * 60) // Convert duration to seconds
+//            stage.timestamp < hourEnd && stageEnd > hourStart
+//        }
+//
+//        // Determine the predominant sleep type for this hour
+//        val predominantType = if (stagesInHour.isNotEmpty()) {
+//            stagesInHour.maxByOrNull { it.duration }?.type ?: SleepType.LIGHT
+//        } else {
+//            SleepType.LIGHT // Default to light sleep if no data
+//        }
+//
+//        val color = when (predominantType) {
+//            SleepType.DEEP -> Color(0xFF7E57C2)
+//            SleepType.LIGHT -> Color(0xFFB39DDB)
+//            SleepType.REM -> Color(0xFFE1BEE7)
+//            SleepType.AWAKE -> Color(0xFFFFE082)
+//        }
+//
+//        // Calculate height based on sleep quality (simplified)
+//        val height = when (predominantType) {
+//            SleepType.DEEP -> (150..180).random()
+//            SleepType.LIGHT -> (100..150).random()
+//            SleepType.REM -> (80..120).random()
+//            SleepType.AWAKE -> (30..80).random()
+//        }
+//
+//        bars.add(SleepChartBar(height, color))
+//    }
+//
+//    return bars
+//}
 
 
 

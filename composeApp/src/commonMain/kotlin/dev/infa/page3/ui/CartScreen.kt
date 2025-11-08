@@ -79,6 +79,7 @@ fun CartScreen(navigator: Navigator, wishlistViewModel: WishlistViewModel, produ
             else -> {}
         }
     }
+    val totalitem by cartViewModel.totalItems.collectAsState()
 
     var currentTab by remember { mutableStateOf("cart") }
 
@@ -103,7 +104,8 @@ fun CartScreen(navigator: Navigator, wishlistViewModel: WishlistViewModel, produ
                             CartScreenNav(
                             )
                         )
-                    }
+                    },
+                    totalitem
                 )
             },
             bottomBar = {

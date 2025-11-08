@@ -1,5 +1,7 @@
 package dev.infa.page3.models
 
+import org.json.JSONObject
+
 // Data class for discovered devices
 data class SmartWatch(
     val deviceName: String,
@@ -86,30 +88,92 @@ data class HealthSettings(
 
 data class DeviceCapabilities(
     // From SetTimeRsp
-    var supportsTemperature: Boolean = false,
-    var supportsPlate: Boolean = false,
-    var supportsMenstruation: Boolean = false,
-    var supportsCustomWallpaper: Boolean = false,
-    var supportsBloodOxygen: Boolean = false,
-    var supportsBloodPressure: Boolean = false,
-    var supportsFatigue: Boolean = false,
-    var supportsOneKeyCheck: Boolean = false,
-    var supportsWeather: Boolean = false,
-    var newSleepProtocol: Boolean = false,
-    var maxWatchFace: Int = 0,
-    var supportsHrv: Boolean = false,
-    var supportsMuslim: Boolean = false,
+    val supportTemperature: Boolean = false,
+    val supportPlate: Boolean = false,
+    val supportMenstruation: Boolean = false,
+    val supportCustomWallpaper: Boolean = false,
+    val supportBloodOxygen: Boolean = false,
+    val supportBloodPressure: Boolean = false,
+    val supportFeature: Boolean = false,
+    val supportOneKeyCheck: Boolean = false,
+    val supportWeather: Boolean = false,
+    val newSleepProtocol: Boolean = false,
+    val maxWatchFace: Int = 0,
+    val supportHrv: Boolean = false,
 
     // From DeviceSupportFunctionRsp
-    var supportsTouch: Boolean = false,
-    var supportsMoslin: Boolean = false,
-    var supportsAppRevision: Boolean = false,
-    var supportsBlePair: Boolean = false,
-    var supportsGesture: Boolean = false,
-    var supportsMusic: Boolean = false,
-    var supportsVideo: Boolean = false,
-    var supportsEbook: Boolean = false,
-    var supportsCamera: Boolean = false,
-    var supportsPhoneCall: Boolean = false,
-    var supportsGame: Boolean = false
-)
+    val supportTouch: Boolean = false,
+    val supportMoslin: Boolean = false,
+    val supportAPPRevision: Boolean = false,
+    val supportBlePair: Boolean = false,
+    val supportGesture: Boolean = false,
+    val supportRingMusic: Boolean = false,
+    val supportRingVideo: Boolean = false,
+    val supportRingEbook: Boolean = false,
+    val supportRingCamera: Boolean = false,
+    val supportRingPhoneCall: Boolean = false,
+    val supportRingGame: Boolean = false
+) {
+    fun toJson(): String {
+        return JSONObject().apply {
+            put("supportTemperature", supportTemperature)
+            put("supportPlate", supportPlate)
+            put("supportMenstruation", supportMenstruation)
+            put("supportCustomWallpaper", supportCustomWallpaper)
+            put("supportBloodOxygen", supportBloodOxygen)
+            put("supportBloodPressure", supportBloodPressure)
+            put("supportFeature", supportFeature)
+            put("supportOneKeyCheck", supportOneKeyCheck)
+            put("supportWeather", supportWeather)
+            put("newSleepProtocol", newSleepProtocol)
+            put("maxWatchFace", maxWatchFace)
+            put("supportHrv", supportHrv)
+            put("supportTouch", supportTouch)
+            put("supportMoslin", supportMoslin)
+            put("supportAPPRevision", supportAPPRevision)
+            put("supportBlePair", supportBlePair)
+            put("supportGesture", supportGesture)
+            put("supportRingMusic", supportRingMusic)
+            put("supportRingVideo", supportRingVideo)
+            put("supportRingEbook", supportRingEbook)
+            put("supportRingCamera", supportRingCamera)
+            put("supportRingPhoneCall", supportRingPhoneCall)
+            put("supportRingGame", supportRingGame)
+        }.toString()
+    }
+
+    companion object {
+        fun fromJson(json: String): DeviceCapabilities? {
+            return try {
+                val obj = JSONObject(json)
+                DeviceCapabilities(
+                    supportTemperature = obj.optBoolean("supportTemperature", false),
+                    supportPlate = obj.optBoolean("supportPlate", false),
+                    supportMenstruation = obj.optBoolean("supportMenstruation", false),
+                    supportCustomWallpaper = obj.optBoolean("supportCustomWallpaper", false),
+                    supportBloodOxygen = obj.optBoolean("supportBloodOxygen", false),
+                    supportBloodPressure = obj.optBoolean("supportBloodPressure", false),
+                    supportFeature = obj.optBoolean("supportFeature", false),
+                    supportOneKeyCheck = obj.optBoolean("supportOneKeyCheck", false),
+                    supportWeather = obj.optBoolean("supportWeather", false),
+                    newSleepProtocol = obj.optBoolean("newSleepProtocol", false),
+                    maxWatchFace = obj.optInt("maxWatchFace", 0),
+                    supportHrv = obj.optBoolean("supportHrv", false),
+                    supportTouch = obj.optBoolean("supportTouch", false),
+                    supportMoslin = obj.optBoolean("supportMoslin", false),
+                    supportAPPRevision = obj.optBoolean("supportAPPRevision", false),
+                    supportBlePair = obj.optBoolean("supportBlePair", false),
+                    supportGesture = obj.optBoolean("supportGesture", false),
+                    supportRingMusic = obj.optBoolean("supportRingMusic", false),
+                    supportRingVideo = obj.optBoolean("supportRingVideo", false),
+                    supportRingEbook = obj.optBoolean("supportRingEbook", false),
+                    supportRingCamera = obj.optBoolean("supportRingCamera", false),
+                    supportRingPhoneCall = obj.optBoolean("supportRingPhoneCall", false),
+                    supportRingGame = obj.optBoolean("supportRingGame", false)
+                )
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+}

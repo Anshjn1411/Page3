@@ -100,12 +100,13 @@ import kotlinx.coroutines.launch
 @Composable
 fun ProductDetailScreen(
     productId: String,
-    navigator: Navigator, wishlistViewModel: WishlistViewModel, productViewModel: ProductViewModel,
+    navigator: Navigator,
+    wishlistViewModel: WishlistViewModel,
+    productViewModel: ProductViewModel,
     cartViewModel: CartViewModel,
     authViewModel: AuthViewModel,
     categoryViewModel: CategoryViewModel
 ) {
-
     val ratingViewModel: RatingViewModel = remember {
         RatingViewModel(RatingRepository(ApiService(), SessionManager()))
     }
@@ -113,37 +114,49 @@ fun ProductDetailScreen(
     val reviewViewModel: ReviewViewModel = remember {
         ReviewViewModel(ReviewRepository(ApiService(), SessionManager()))
     }
+
     val productState by productViewModel.selectedProductState.collectAsState()
     val averageRating by ratingViewModel.averageRating.collectAsState()
     val reviewCount by reviewViewModel.reviewCount.collectAsState()
 
-    var showAddToCartDialog by remember { mutableStateOf(false) }
+    // State for selected attributes and quantity
+    var selectedAttributes by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var quantity by remember { mutableStateOf(1) }
+    var showAttributeError by remember { mutableStateOf(false) }
+
     LaunchedEffect(productId) {
         productViewModel.getProductById(productId)
         ratingViewModel.loadProductRatings(productId)
         reviewViewModel.loadProductReviews(productId)
+        // Reset selections when product changes
+        selectedAttributes = emptyMap()
+        quantity = 1
     }
+
+    val totalitem by cartViewModel.totalItems.collectAsState()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var currentTab by remember { mutableStateOf("home") }
 
-
     ModalNavigationDrawer(
-        drawerContent = { AppSideBar(
-            navigator = navigator, wishlistViewModel,
-            authViewModel = authViewModel,
-            productViewModel = productViewModel,
-            cartViewModel =cartViewModel,
-            categoryViewModel = categoryViewModel
-        ) },
+        drawerContent = {
+            AppSideBar(
+                navigator = navigator,
+                wishlistViewModel,
+                authViewModel = authViewModel,
+                productViewModel = productViewModel,
+                cartViewModel = cartViewModel,
+                categoryViewModel = categoryViewModel
+            )
+        },
         drawerState = drawerState
     ) {
         Scaffold(
             topBar = {
                 TopBarScreen(
                     onClickMenu = { scope.launch { drawerState.open() } },
-                    onClickShop = { navigator.push(CartScreenNav(
-                       )) }
+                    onClickShop = { navigator.push(CartScreenNav()) },
+                    totalitem
                 )
             },
             bottomBar = {
@@ -177,31 +190,83 @@ fun ProductDetailScreen(
                             product = product,
                             averageRating = averageRating,
                             reviewCount = reviewCount,
-                            onAddtoCharClick = {
-                                showAddToCartDialog = true
+                            selectedAttributes = selectedAttributes,
+                            quantity = quantity,
+                            onAttributeSelected = { attributeKey, option ->
+                                selectedAttributes = selectedAttributes.toMutableMap().apply {
+                                    this[attributeKey] = option
+                                }
+                                showAttributeError = false
+                            },
+                            onQuantityChange = { newQuantity ->
+                                quantity = newQuantity
+                            },
+                            onAddtoCartClick = {
+                                val attributesWithOptions = product.attributes.filter {
+                                    !it.options.isNullOrEmpty()
+                                }
+                                if (attributesWithOptions.isNotEmpty() &&
+                                    attributesWithOptions.any {
+                                        selectedAttributes[it.slug ?: it.name].isNullOrBlank()
+                                    }
+                                ) {
+                                    showAttributeError = true
+                                } else {
+                                    cartViewModel.addToCart(product, selectedAttributes)
+                                    showAttributeError = false
+                                    navigator.push(CartScreenNav())
+                                }
                             },
                             onBuyNowClick = {
-                                showAddToCartDialog = true
+                                // Validate that all attributes with options are selected
+                                val attributesWithOptions = product.attributes.filter {
+                                    !it.options.isNullOrEmpty()
+                                }
+                                if (attributesWithOptions.isNotEmpty() &&
+                                    attributesWithOptions.any {
+                                        selectedAttributes[it.slug ?: it.name].isNullOrBlank()
+                                    }
+                                ) {
+                                    showAttributeError = true
+                                } else {
+                                    cartViewModel.addToCart(product, selectedAttributes)
+                                    navigator.push(CartScreenNav())
+                                }
                             },
                             onAddtoWishlist = {
-                                wishlistIds.contains(product.id)
                                 wishlistViewModel.toggleWishlist(product)
                             },
-                            InWishList = wishlistIds.contains(product.id)
+                            inWishList = wishlistIds.contains(product.id)
                         )
                     }
 
-                    if (showAddToCartDialog) {
-                        AddToCartDialog(
-                            product = product,
-                            onDismiss = { showAddToCartDialog = false },
-                            onConfirm = { attributes, quantity ->
-                                cartViewModel.addToCart(product, attributes)
-                                showAddToCartDialog = false
+                    // Error Dialog for missing attributes
+                    if (showAttributeError) {
+                        AlertDialog(
+                            onDismissRequest = { showAttributeError = false },
+                            title = {
+                                Text(
+                                    text = "Selection Required",
+                                    style = MaterialTheme.typography.titleLarge.copy(
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                            },
+                            text = {
+                                Text(
+                                    text = "Please select all required attributes (size, color, etc.) before adding to cart.",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            },
+                            confirmButton = {
+                                TextButton(
+                                    onClick = { showAttributeError = false }
+                                ) {
+                                    Text("OK")
+                                }
                             }
                         )
                     }
-
                 }
 
                 is SingleUiState.Error -> {
@@ -214,54 +279,20 @@ fun ProductDetailScreen(
     }
 }
 
-// ======================= 2. CHECKOUT SCREEN (Voyager Screen) =======================
-
-// Platform-specific URL opener
-expect fun openUrl(url: String)
-
-
-
-// ======================= 3. PAYMENT REDIRECT DIALOG =======================
-
-@Composable
-fun PaymentRedirectDialog(onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Payment Gateway Opened") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("You will be redirected to complete your payment.")
-                Text(
-                    "After completing the payment, return to the app.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("I've Completed Payment")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
 @Composable
 fun ProductDetailsTab(
     product: Product,
     averageRating: Double,
     reviewCount: Int,
-    onAddtoCharClick: () -> Unit,
+    selectedAttributes: Map<String, String>,
+    quantity: Int,
+    onAttributeSelected: (String, String) -> Unit,
+    onQuantityChange: (Int) -> Unit,
+    onAddtoCartClick: () -> Unit,
     onBuyNowClick: () -> Unit,
     onAddtoWishlist: () -> Unit,
-    InWishList: Boolean
+    inWishList: Boolean
 ) {
-    var quantity by remember { mutableStateOf(1) }
     var isDescriptionExpanded by remember { mutableStateOf(false) }
     var isAdditionalInfoExpanded by remember { mutableStateOf(false) }
     var isReviewsExpanded by remember { mutableStateOf(false) }
@@ -285,7 +316,6 @@ fun ProductDetailsTab(
             url = normalize(product.images.firstOrNull()?.src)
         )
 
-        // Image section
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -303,7 +333,6 @@ fun ProductDetailsTab(
         Column(
             modifier = Modifier.padding(20.dp)
         ) {
-            // Product Name (Bold)
             Text(
                 text = product.name ?: "",
                 style = MaterialTheme.typography.headlineSmall.copy(
@@ -315,7 +344,6 @@ fun ProductDetailsTab(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Price
             Text(
                 text = "₹${(product.price) ?: "0"}.00",
                 style = MaterialTheme.typography.headlineSmall.copy(
@@ -327,7 +355,6 @@ fun ProductDetailsTab(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Add to Wishlist Button
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -335,7 +362,7 @@ fun ProductDetailsTab(
                     .padding(vertical = 4.dp)
             ) {
                 Icon(
-                    imageVector = if (InWishList) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                    imageVector = if (inWishList) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                     contentDescription = "Add to wishlist",
                     tint = Color(0xFF2C2C2C),
                     modifier = Modifier.size(24.dp)
@@ -343,19 +370,19 @@ fun ProductDetailsTab(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "Add to wishlist",
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontSize = 16.sp
-                    ),
+                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp),
                     color = Color(0xFF2C2C2C)
                 )
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Attributes Section (Color, Size, etc.)
+            // Attributes Section with Selection (inline display)
             if (product.attributes.isNotEmpty()) {
-                ProductAttributesSection(
-                    attributes = product.attributes
+                ProductAttributesSelectionSection(
+                    attributes = product.attributes,
+                    selectedAttributes = selectedAttributes,
+                    onAttributeSelected = onAttributeSelected
                 )
             }
 
@@ -366,22 +393,19 @@ fun ProductDetailsTab(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Row: Quantity Selector + Add to Cart
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Quantity Selector
                     QuantitySelector(
                         quantity = quantity,
-                        onQuantityChange = { quantity = it },
+                        onQuantityChange = onQuantityChange,
                         modifier = Modifier.weight(0.35f)
                     )
 
-                    // Add to Cart Button
                     Button(
-                        onClick = { onAddtoCharClick() },
+                        onClick = { onAddtoCartClick() },
                         modifier = Modifier
                             .weight(0.65f)
                             .height(56.dp),
@@ -400,7 +424,6 @@ fun ProductDetailsTab(
                     }
                 }
 
-                // Buy Now Button (Full Width)
                 Button(
                     onClick = { onBuyNowClick() },
                     modifier = Modifier
@@ -423,10 +446,8 @@ fun ProductDetailsTab(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Collapsible Cards Section
             Divider(color = Color(0xFFE0E0E0))
 
-            // Description Card
             CollapsibleInfoCard(
                 title = "Description",
                 isExpanded = isDescriptionExpanded,
@@ -449,15 +470,12 @@ fun ProductDetailsTab(
 
             Divider(color = Color(0xFFE0E0E0))
 
-            // Additional Information Card
             CollapsibleInfoCard(
                 title = "Additional information",
                 isExpanded = isAdditionalInfoExpanded,
                 onToggle = { isAdditionalInfoExpanded = !isAdditionalInfoExpanded }
             ) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     product.attributes.forEach { attribute ->
                         if (!attribute.options.isNullOrEmpty()) {
                             Row(
@@ -484,15 +502,12 @@ fun ProductDetailsTab(
 
             Divider(color = Color(0xFFE0E0E0))
 
-            // Reviews Card
             CollapsibleInfoCard(
                 title = "Reviews ($reviewCount)",
                 isExpanded = isReviewsExpanded,
                 onToggle = { isReviewsExpanded = !isReviewsExpanded }
             ) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -521,6 +536,70 @@ fun ProductDetailsTab(
             }
 
             Spacer(modifier = Modifier.height(100.dp))
+        }
+    }
+}
+
+@Composable
+fun ProductAttributesSelectionSection(
+    attributes: List<WcAttributes>,
+    selectedAttributes: Map<String, String>,
+    onAttributeSelected: (String, String) -> Unit
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        attributes.forEach { attribute ->
+            if (!attribute.options.isNullOrEmpty()) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = (attribute.name ?: "").replaceFirstChar {
+                            if (it.isLowerCase()) it.titlecase() else it.toString()
+                        },
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        color = Color(0xFF2C2C2C)
+                    )
+
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        attribute.options?.forEach { option ->
+                            val attributeKey: String = attribute.slug ?: attribute.name
+                            val isSelected = selectedAttributes[attributeKey] == option
+
+                            Surface(
+                                modifier = Modifier.clickable {
+                                    onAttributeSelected(attributeKey, option)
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) Color.Black else Color.White,
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSelected) Color.Black else Color(0xFFE0E0E0)
+                                )
+                            ) {
+                                Text(
+                                    text = option,
+                                    modifier = Modifier.padding(
+                                        horizontal = 16.dp,
+                                        vertical = 12.dp
+                                    ),
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = FontWeight.Medium
+                                    ),
+                                    color = if (isSelected) Color.White else Color(0xFF2C2C2C)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -572,6 +651,13 @@ fun QuantitySelector(
         }
     }
 }
+
+
+// ======================= 2. CHECKOUT SCREEN (Voyager Screen) =======================
+
+// Platform-specific URL opener
+expect fun openUrl(url: String)
+
 
 @Composable
 fun CollapsibleInfoCard(
@@ -1048,3 +1134,11 @@ fun AddToCartDialog(
         }
     )
 }
+
+
+data class Attribute(
+    val id: Int?,
+    val name: String?,
+    val slug: String?,
+    val options: List<String>?
+)

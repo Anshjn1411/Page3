@@ -86,6 +86,7 @@ fun WishlistScreen(navigator: Navigator, wishlistViewModel: WishlistViewModel, p
     val wishlistState by wishlistViewModel.wishlistState.collectAsState()
     val wishlistProductIds by wishlistViewModel.wishlistProductIds.collectAsState()
     val actionState by wishlistViewModel.actionState.collectAsState()
+    val totalitem by cartViewModel.totalItems.collectAsState()
 
     val uiState by AuthManager.authState.collectAsState()
 
@@ -140,7 +141,8 @@ fun WishlistScreen(navigator: Navigator, wishlistViewModel: WishlistViewModel, p
                                     CartScreenNav(
                                     )
                                 )
-                            }
+                            },
+                            totalitem
                         )
                     },
                     bottomBar = {
@@ -228,7 +230,8 @@ fun WishlistScreen(navigator: Navigator, wishlistViewModel: WishlistViewModel, p
                                         CartScreenNav(
                                         )
                                     )
-                                }
+                                },
+                                totalitem
                             )
                         },
                         bottomBar = {

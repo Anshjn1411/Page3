@@ -98,6 +98,7 @@ fun ShopScreen(
     LaunchedEffect(Unit) {
         productViewModel.loadProducts(page = 1, perPage = 10)
     }
+    val totalitem by cartViewModel.totalItems.collectAsState()
 
     val hasActiveSearch = searchState.query.isNotBlank()
     val hasActiveFilters = searchState.filters != SearchFilters()
@@ -139,7 +140,8 @@ fun ShopScreen(
                 TopBarScreen(
                     onClickMenu = { scope.launch { drawerState.open() } },
                     onClickShop = { navigator.push(CartScreenNav(
-                    )) }
+                    )) },
+                    totalitem
                 )
             },
             bottomBar = {

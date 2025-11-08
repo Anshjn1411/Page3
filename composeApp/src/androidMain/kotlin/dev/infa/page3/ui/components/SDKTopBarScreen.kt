@@ -41,8 +41,7 @@ fun SDKTopBarScreen(
         // 🔹 Top App Bar
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
             // 🍔 Hamburger Menu (Left)

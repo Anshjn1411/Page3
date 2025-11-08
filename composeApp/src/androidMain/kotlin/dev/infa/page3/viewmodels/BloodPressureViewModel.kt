@@ -16,13 +16,21 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
+import com.oudmon.ble.base.communication.CommandHandle
+import com.oudmon.ble.base.communication.ICommandResponse
+import com.oudmon.ble.base.communication.Constants
+import com.oudmon.ble.base.communication.req.SimpleKeyReq
+import com.oudmon.ble.base.communication.rsp.BpDataRsp
+import com.oudmon.ble.base.communication.req.ReadPressureReq
+import com.oudmon.ble.base.communication.rsp.ReadBlePressureRsp
+import com.oudmon.ble.base.communication.req.BpSettingReq
+import com.oudmon.ble.base.communication.rsp.BpSettingRsp
+import com.oudmon.ble.base.communication.rsp.BaseRspCmd
+import dev.infa.page3.models.HealthData
 
 
 class BloodPressureViewModel(
-    private val dataSynchronization: DataSynchronization,
-    private val healthMonitorCore: HealthMonitorCore,
-    private val healthMeasurements: HealthMeasurements
+    private val commandHandle: CommandHandle = CommandHandle.getInstance()
 ) : ViewModel() {
 
     private val _isLoading = MutableStateFlow(false)
@@ -47,7 +55,7 @@ class BloodPressureViewModel(
 
     val latest: StateFlow<BPDisplay> = combine(
         _instant,
-        MutableStateFlow(healthMonitorCore.healthData),
+        MutableStateFlow(HealthData()),
         _readings
     ) { inst, live, list ->
         when {
@@ -65,29 +73,14 @@ class BloodPressureViewModel(
     val maxSystolic: StateFlow<Int> = _readings.map { it.maxOfOrNull { r -> r.systolic } ?: 0 }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
-    init {
-        dataSynchronization.setBloodPressureCallback { bpData ->
-            val points = bpData.entries.map { e ->
-                val ts = System.currentTimeMillis()
-                BPReading(timestamp = ts, systolic = e.sbp, diastolic = e.dbp, heartRate = e.hr ?: 0)
-            }
-            _readings.value = (_readings.value + points).sortedBy { it.timestamp }
-        }
-
-        viewModelScope.launch {
-            while (true) {
-                val hd = healthMonitorCore.healthData
-                if (_isMeasuring.value && hd.systolic > 0 && hd.diastolic > 0) {
-                    _instant.value = BPDisplay(hd.systolic, hd.diastolic)
-                }
-                delay(500)
-            }
-        }
-    }
+    init { }
 
     fun refreshAuto(userAge: Int = 30) {
         viewModelScope.launch {
-            try { _isLoading.value = true; _error.value = null; withContext(Dispatchers.IO) { dataSynchronization.syncBloodPressureAuto(userAge) } }
+            try {
+                _isLoading.value = true; _error.value = null
+                withContext(Dispatchers.IO) { syncBpAutoInline(userAge) }
+            }
             catch (e: Exception) { _error.value = e.message }
             finally { _isLoading.value = false }
         }
@@ -95,7 +88,10 @@ class BloodPressureViewModel(
 
     fun refreshManual() {
         viewModelScope.launch {
-            try { _isLoading.value = true; _error.value = null; withContext(Dispatchers.IO) { dataSynchronization.syncBloodPressureManual() } }
+            try {
+                _isLoading.value = true; _error.value = null
+                withContext(Dispatchers.IO) { syncBpManualInline() }
+            }
             catch (e: Exception) { _error.value = e.message }
             finally { _isLoading.value = false }
         }
@@ -109,8 +105,6 @@ class BloodPressureViewModel(
                 _measurementProgress.value = 0
                 _error.value = null
                 _instant.value = null
-
-                withContext(Dispatchers.IO) { healthMeasurements.measureBloodPressureOnce() }
                 val start = System.currentTimeMillis()
                 val total = 30000L
                 while (System.currentTimeMillis() - start < total) {
@@ -119,13 +113,11 @@ class BloodPressureViewModel(
                     _measurementProgress.value = ((elapsed * 100) / total).toInt().coerceAtMost(99)
                     delay(300)
                 }
-                withContext(Dispatchers.IO) { healthMeasurements.stopBloodPressureMeasurement() }
                 _measurementProgress.value = 100
                 delay(300)
+                withContext(Dispatchers.IO) { syncBpManualInline() }
+                _instant.value = _readings.value.lastOrNull()?.toDisplay()
                 if (_instant.value == null) _error.value = "No valid measurement"
-            } catch (e: Exception) {
-                _error.value = "Measurement failed: ${e.message}"
-                Log.e("BPViewModel", "measure error", e)
             } finally {
                 _isMeasuring.value = false
                 _measurementProgress.value = 0
@@ -133,14 +125,14 @@ class BloodPressureViewModel(
         }
     }
 
-    fun stopMeasurement() {
-        measurementJob?.cancel()
-        viewModelScope.launch { healthMeasurements.stopBloodPressureMeasurement(); _isMeasuring.value = false; _measurementProgress.value = 0 }
-    }
+    fun stopMeasurement() { measurementJob?.cancel(); _isMeasuring.value = false; _measurementProgress.value = 0 }
 
     fun toggleContinuousMonitoring(enabled: Boolean) {
         viewModelScope.launch {
-            try { _isLoading.value = true; _error.value = null; healthMonitorCore.toggleBloodPressure(enabled) }
+            try {
+                _isLoading.value = true; _error.value = null
+                toggleBpInline(enabled)
+            }
             catch (e: Exception) { _error.value = e.message }
             finally { _isLoading.value = false }
         }
@@ -149,6 +141,54 @@ class BloodPressureViewModel(
     data class BPDisplay(val systolicBP: Int = 0, val diastolicBP: Int = 0)
     data class BPReading(val timestamp: Long, val systolic: Int, val diastolic: Int, val heartRate: Int) {
         fun toDisplay() = BPDisplay(systolic, diastolic)
+    }
+
+    // Inline SDK ops
+    private fun syncBpAutoInline(userAge: Int) {
+        try {
+            commandHandle.executeReqCmd(
+                SimpleKeyReq(Constants.CMD_BP_TIMING_MONITOR_DATA),
+                object : ICommandResponse<BpDataRsp> {
+                    override fun onDataResponse(resultEntity: BpDataRsp) {
+                        try {
+                            val entries = resultEntity.bpDataEntity?.bpValues ?: return
+                            val now = System.currentTimeMillis()
+                            val points = entries.map { e -> BPReading(timestamp = now, systolic = e.timeMinute, diastolic = e.value, heartRate = e.value) }
+                            _readings.value = (_readings.value + points).sortedBy { it.timestamp }
+                        } catch (_: Exception) {}
+                    }
+                }
+            )
+        } catch (_: Exception) {}
+    }
+
+    private fun syncBpManualInline() {
+        try {
+            commandHandle.executeReqCmd(
+                ReadPressureReq(0),
+                object : ICommandResponse<ReadBlePressureRsp> {
+                    override fun onDataResponse(resultEntity: ReadBlePressureRsp) {
+                        try {
+                            val list = resultEntity.valueList ?: emptyList()
+                            val now = System.currentTimeMillis()
+                            val points = list.map { v -> BPReading(timestamp = now, systolic = v.sbp, diastolic = v.dbp, heartRate = 0) }
+                            _readings.value = (_readings.value + points).sortedBy { it.timestamp }
+                        } catch (_: Exception) {}
+                    }
+                }
+            )
+        } catch (_: Exception) {}
+    }
+
+    private fun toggleBpInline(enabled: Boolean) {
+        try {
+            commandHandle.executeReqCmd(
+                BpSettingReq.getWriteInstance(enabled, null, 60),
+                object : ICommandResponse<BpSettingRsp> {
+                    override fun onDataResponse(resultEntity: BpSettingRsp) { /* no-op */ }
+                }
+            )
+        } catch (_: Exception) {}
     }
 }
 

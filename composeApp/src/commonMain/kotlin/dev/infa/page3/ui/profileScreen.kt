@@ -1,5 +1,6 @@
 package dev.infa.page3.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -22,14 +24,17 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -47,6 +52,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
@@ -60,14 +66,18 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import cafe.adriel.voyager.navigator.Navigator
 import dev.infa.page3.data.model.User
 import dev.infa.page3.data.remote.SessionManager
+import dev.infa.page3.navigation.AccountDetail
 import dev.infa.page3.navigation.AddressAmangementNav
 import dev.infa.page3.navigation.AppViewModels.categoryViewModel
 import dev.infa.page3.navigation.AppViewModels.productViewModel
@@ -101,14 +111,14 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
-    navigator: Navigator, wishlistViewModel: WishlistViewModel, productViewModel: ProductViewModel,
-
+    navigator: Navigator,
+    wishlistViewModel: WishlistViewModel,
+    productViewModel: ProductViewModel,
     cartViewModel: CartViewModel,
     authViewModel: AuthViewModel,
     categoryViewModel: CategoryViewModel
 ) {
-
-
+    val totalitem by cartViewModel.totalItems.collectAsState()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
@@ -119,15 +129,14 @@ fun ProfileScreen(
     var currentTab by remember { mutableStateOf("profile") }
     var showLogoutDialog by remember { mutableStateOf(false) }
 
-    val snackbarHostState = remember { SnackbarHostState() }
-    val coroutineScope = rememberCoroutineScope()
-
     when (authState) {
         is AuthUiState.LoggedIn -> {
             ModalNavigationDrawer(
                 drawerContent = {
                     AppSideBar(
-                        navigator = navigator, wishlistViewModel, cartViewModel = cartViewModel,
+                        navigator = navigator,
+                        wishlistViewModel,
+                        cartViewModel = cartViewModel,
                         categoryViewModel = categoryViewModel,
                         productViewModel = productViewModel,
                         authViewModel = authViewModel,
@@ -135,17 +144,12 @@ fun ProfileScreen(
                 },
                 drawerState = drawerState
             ) {
-
                 Scaffold(
                     topBar = {
                         TopBarScreen(
                             onClickMenu = { scope.launch { drawerState.open() } },
-                            onClickShop = {
-                                navigator.push(
-                                    CartScreenNav(
-                                    )
-                                )
-                            }
+                            onClickShop = { navigator.push(CartScreenNav()) },
+                            totalitem
                         )
                     },
                     bottomBar = {
@@ -157,49 +161,46 @@ fun ProfileScreen(
                             wishListViewModel = wishlistViewModel,
                             cartViewModel = cartViewModel,
                             authViewModel = authViewModel
-
                         )
                     }
                 ) { innerPadding ->
-                if (userData != null) {
-                    ProfileContent(
-                        userData = userData,
-                        padding = innerPadding,
-                        navigator = navigator,
-                        onLogout = {
-                            showLogoutDialog = true
+                    if (userData != null) {
+                        ModernProfileContent(
+                            userData = userData,
+                            padding = innerPadding,
+                            navigator = navigator,
+                            onLogout = { showLogoutDialog = true }
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("No user data found")
                         }
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("No user data found")
+                    }
+
+                    if (showLogoutDialog) {
+                        LogoutDialog(
+                            onDismiss = { showLogoutDialog = false },
+                            onConfirm = {
+                                authViewModel.logout()
+                                navigator.push(OTPScreen())
+                                showLogoutDialog = false
+                            }
+                        )
                     }
                 }
-
-                // Logout Confirmation Dialog
-                if (showLogoutDialog) {
-                    LogoutDialog(
-                        onDismiss = { showLogoutDialog = false },
-                        onConfirm = {
-                            authViewModel.logout()
-                            navigator.push(OTPScreen())
-                            showLogoutDialog = false
-                        }
-                    )
-                }
-
-        }
-    }
+            }
         }
 
         else -> {
             ModalNavigationDrawer(
                 drawerContent = {
                     AppSideBar(
-                        navigator = navigator, wishlistViewModel, cartViewModel = cartViewModel,
+                        navigator = navigator,
+                        wishlistViewModel,
+                        cartViewModel = cartViewModel,
                         categoryViewModel = categoryViewModel,
                         productViewModel = productViewModel,
                         authViewModel = authViewModel,
@@ -207,17 +208,12 @@ fun ProfileScreen(
                 },
                 drawerState = drawerState
             ) {
-
                 Scaffold(
                     topBar = {
                         TopBarScreen(
                             onClickMenu = { scope.launch { drawerState.open() } },
-                            onClickShop = {
-                                navigator.push(
-                                    CartScreenNav(
-                                    )
-                                )
-                            }
+                            onClickShop = { navigator.push(CartScreenNav()) },
+                            totalitem
                         )
                     },
                     bottomBar = {
@@ -229,7 +225,6 @@ fun ProfileScreen(
                             wishListViewModel = wishlistViewModel,
                             cartViewModel = cartViewModel,
                             authViewModel = authViewModel
-
                         )
                     }
                 ) { innerPadding ->
@@ -238,9 +233,9 @@ fun ProfileScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            LoginButton {navigator.push(OTPScreen())}
+                            LoginButton { navigator.push(OTPScreen()) }
                             Spacer(Modifier.height(10.dp))
-                            SignUpButton {navigator.push(OTPScreen()) }
+                            SignUpButton { navigator.push(OTPScreen()) }
                         }
                     }
                 }
@@ -248,193 +243,258 @@ fun ProfileScreen(
         }
     }
 }
+
 @Composable
-fun ProfileContent(
+fun ModernProfileContent(
     userData: UserData,
     padding: PaddingValues,
     navigator: Navigator,
     onLogout: () -> Unit
 ) {
     var showDialog by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(padding)
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .verticalScroll(rememberScrollState())
+            .background(Color(0xFFF8F8F8)),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Profile Header
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Profile Icon (Centered)
+        Box(
+            modifier = Modifier
+                .size(100.dp)
+                .background(
+                    color = Color(0xFFE8E8E8),
+                    shape = CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.AccountCircle,
+                contentDescription = "Profile",
+                modifier = Modifier.size(60.dp),
+                tint = Color(0xFF6B6B6B)
             )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // User Name
+        Text(
+            text = "${userData.firstName} ${userData.lastName}",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF1A1A1A)
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Email
+        Text(
+            text = userData.email,
+            fontSize = 14.sp,
+            color = Color(0xFF6B6B6B)
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // My Account Section Title
+        Text(
+            text = "MY ACCOUNT",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color(0xFF6B6B6B),
+            letterSpacing = 1.sp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Menu Cards
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            ProfileMenuCard(
+                icon = Icons.Default.ShoppingBag,
+                title = "Orders",
+                onClick = { showDialog = true }
+            )
+
+            ProfileMenuCard(
+                icon = Icons.Default.LocationOn,
+                title = "Addresses",
+                onClick = { navigator.push(AccountDetail()) }
+            )
+
+            ProfileMenuCard(
+                icon = Icons.Default.Person,
+                title = "Account details",
+                onClick = { navigator.push(AccountDetail()) }
+            )
+
+            ProfileMenuCard(
+                icon = Icons.Outlined.FavoriteBorder,
+                title = "Wishlist",
+                onClick = { navigator.push(WishlistScreenNav()) }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Logout Button
+        Surface(
+            onClick = onLogout,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .height(56.dp),
+            color = Color.Black,
+            shape = RoundedCornerShape(12.dp),
+            shadowElevation = 2.dp
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = Icons.Default.AccountCircle,
-                    contentDescription = "Profile",
-                    modifier = Modifier.size(64.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                    contentDescription = "Logout",
+                    tint = Color.White
                 )
-                Column {
-                    Text(
-                        text = "${userData.firstName} ${userData.lastName}",
-                        style = MaterialTheme.typography.titleLarge
-                    )
-                    Text(
-                        text = userData.email,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Text(
-                        text = userData.phone,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Logout",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         }
 
-        // User Details Card
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Thank You Message
         Card(
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(2.dp)
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = "Personal Information",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                Icon(
+                    imageVector = Icons.Default.FavoriteBorder,
+                    contentDescription = null,
+                    tint = Color.Black,
+                    modifier = Modifier.size(32.dp)
                 )
-
-                ProfileDetailRow(label = "First Name", value = userData.firstName)
-                ProfileDetailRow(label = "Last Name", value = userData.lastName)
-                ProfileDetailRow(label = "Email", value = userData.email)
-                ProfileDetailRow(label = "Username", value = userData.username)
-                ProfileDetailRow(label = "Phone", value = userData.phone)
-            }
-        }
-
-        // Billing Address Card
-        Card(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+                Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "Billing Address",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    text = "Thank you for choosing",
+                    fontSize = 14.sp,
+                    color = Color(0xFF6B6B6B),
+                    textAlign = TextAlign.Center
                 )
-
-                val billing = userData.billingAddress
-                ProfileDetailRow(label = "Address", value = billing.address_1 ?: "Not provided")
-                ProfileDetailRow(label = "City", value = billing.city ?: "Not provided")
-                ProfileDetailRow(label = "State", value = billing.state ?: "Not provided")
-                ProfileDetailRow(label = "Postcode", value = billing.postcode ?: "Not provided")
-                ProfileDetailRow(label = "Country", value = billing.country ?: "Not provided")
-            }
-        }
-
-        // Shipping Address Card
-        Card(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
                 Text(
-                    text = "Shipping Address",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    text = "India's Best Fitness App",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1A1A1A),
+                    textAlign = TextAlign.Center
                 )
-
-                val shipping = userData.shippingAddress
-                ProfileDetailRow(label = "Address", value = shipping.address_1 ?: "Not provided")
-                ProfileDetailRow(label = "City", value = shipping.city ?: "Not provided")
-                ProfileDetailRow(label = "State", value = shipping.state ?: "Not provided")
-                ProfileDetailRow(label = "Postcode", value = shipping.postcode ?: "Not provided")
-                ProfileDetailRow(label = "Country", value = shipping.country ?: "Not provided")
+                Text(
+                    text = "Page3",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color.Black,
+                    textAlign = TextAlign.Center
+                )
             }
         }
 
-        // Menu Items
-        ProfileMenuItem(
-            icon = Icons.Default.ShoppingBag,
-            title = "My Orders",
-            onClick = {  showDialog = true
-            }
-        )
-        ProfileMenuItem(
-            icon = Icons.Default.LocationOn,
-            title = "Addresses",
-            subtitle = "Manage your addresses",
-            onClick = { showDialog = true }
-        )
-        ProfileMenuItem(
-            icon = Icons.Default.Settings,
-            title = "Settings",
-            onClick = {showDialog = true }
-        )
-        ProfileMenuItem(
-            icon = Icons.Default.Info,
-            title = "About",
-            onClick = { showDialog = true }
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Logout Button
-        Button(
-            onClick = onLogout,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.error
-            )
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                contentDescription = "Logout"
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Logout")
-        }
+        Spacer(modifier = Modifier.height(24.dp))
     }
+
     if (showDialog) {
-        UnderDevelopmentDialog(
-            onDismiss = { showDialog = false }
-        )
+        UnderDevelopmentDialog(onDismiss = { showDialog = false })
     }
 }
+
 @Composable
-fun ProfileDetailRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+fun ProfileMenuCard(
+    icon: ImageVector,
+    title: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(72.dp),
+        color = Color.White,
+        shape = RoundedCornerShape(12.dp),
+        shadowElevation = 1.dp
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Icon Circle
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(
+                        color = Color(0xFFF5F5F5),
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Color(0xFF2C2C2C),
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            // Title
+            Text(
+                text = title,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF1A1A1A),
+                modifier = Modifier.weight(1f)
+            )
+
+            // Arrow
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = Color(0xFF6B6B6B)
+            )
+        }
     }
-    }
+}
 
 
 @Composable
@@ -458,12 +518,12 @@ fun LogoutDialog(
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
-                
+
                 Text(
                     text = "Are you sure you want to logout?",
                     style = MaterialTheme.typography.bodyMedium
                 )
-                
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -474,7 +534,7 @@ fun LogoutDialog(
                     ) {
                         Text("Cancel")
                     }
-                    
+
                     Button(
                         onClick = onConfirm,
                         modifier = Modifier.weight(1f),
@@ -486,55 +546,6 @@ fun LogoutDialog(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-fun ProfileMenuItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String? = null,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onClick
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = title,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Column {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                    if (subtitle != null) {
-                        Text(
-                            text = subtitle,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = "Navigate"
-            )
         }
     }
 }

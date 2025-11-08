@@ -3,7 +3,15 @@ package dev.infa.page3.viewmodels
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.oudmon.ble.base.bluetooth.BleOperateManager
 import dev.infa.page3.models.HealthData
+import com.oudmon.ble.base.communication.CommandHandle
+import com.oudmon.ble.base.communication.ICommandResponse
+import com.oudmon.ble.base.communication.rsp.ReadHeartRateRsp
+import com.oudmon.ble.base.communication.rsp.BaseRspCmd
+import com.oudmon.ble.base.communication.req.ReadHeartRateReq
+import com.oudmon.ble.base.communication.req.HeartRateSettingReq
+import com.oudmon.ble.base.communication.rsp.HeartRateSettingRsp
 import dev.infa.page3.models.HealthSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -21,9 +29,7 @@ import kotlinx.coroutines.withContext
 import java.util.Calendar
 
 class HeartRateViewModel(
-    private val dataSynchronization: DataSynchronization,
-    private val healthMonitorCore: HealthMonitorCore,
-    private val healthMeasurements: HealthMeasurements
+    private val commandHandle: CommandHandle = CommandHandle.getInstance()
 ) : ViewModel()
 {
 
@@ -38,11 +44,11 @@ class HeartRateViewModel(
     private val _todayHeart = MutableStateFlow<HeartRateData?>(null)
     val todayHeart: StateFlow<HeartRateData?> = _todayHeart.asStateFlow()
 
-    // Live health data from device
+    // Live health data placeholder (kept for UI compatibility)
     private val _liveHealthData = MutableStateFlow(HealthData())
     val liveHealthData: StateFlow<HealthData> = _liveHealthData.asStateFlow()
 
-    // Health settings from device
+    // Heart rate settings managed directly via SDK
     private val _healthSettings = MutableStateFlow(HealthSettings())
     val healthSettings: StateFlow<HealthSettings> = _healthSettings.asStateFlow()
 
@@ -164,30 +170,7 @@ class HeartRateViewModel(
      * Setup callbacks to receive live data from device
      */
     private fun setupDataCallbacks() {
-        // Setup heart rate sync callback
-        dataSynchronization.setHeartRateCallback { hr ->
-            _todayHeart.value = hr
-        }
-
-        // Poll for health data and settings updates
-        viewModelScope.launch {
-            while (true) {
-                val healthData = healthMonitorCore.healthData
-
-                // Update live data
-                _liveHealthData.value = healthData
-
-                // If we're measuring and got a valid heart rate, update instant value
-                if (_isMeasuring.value && healthData.heartRate > 0) {
-                    _instantHeartRate.value = healthData.heartRate
-                }
-
-                // Update settings
-                _healthSettings.value = healthMonitorCore.healthSettings
-
-                delay(500) // Poll every 500ms
-            }
-        }
+        // No continuous poll from a core; live health data feed would be wired here if needed
     }
 
     /**
@@ -199,15 +182,12 @@ class HeartRateViewModel(
                 _isLoading.value = true
                 _error.value = null
 
-                // Load current settings from device
-                healthMonitorCore.readHeartRateSettings()
+                // Load current settings from device (inline)
+                readHeartRateSettingsInline()
                 delay(500)
 
-                // Sync today's data
-                withContext(Dispatchers.IO) {
-                    val nowWithTz = dataSynchronization.getCurrentTimeWithTimezone()
-                    dataSynchronization.syncHeartRateData(nowWithTz)
-                }
+                // Sync today's data (inline)
+                withContext(Dispatchers.IO) { syncHeartRateDataInline() }
             } catch (e: Exception) {
                 _error.value = "Failed to load data: ${e.message}"
             } finally {
@@ -225,15 +205,12 @@ class HeartRateViewModel(
                 _isLoading.value = true
                 _error.value = null
 
-                // Refresh settings
-                healthMonitorCore.readHeartRateSettings()
+                // Refresh settings (inline)
+                readHeartRateSettingsInline()
                 delay(300)
 
-                // Refresh today's synced data
-                withContext(Dispatchers.IO) {
-                    val nowWithTz = dataSynchronization.getCurrentTimeWithTimezone()
-                    dataSynchronization.syncHeartRateData(nowWithTz)
-                }
+                // Refresh today's synced data (inline)
+                withContext(Dispatchers.IO) { syncHeartRateDataInline() }
             } catch (e: Exception) {
                 _error.value = "Refresh failed: ${e.message}"
             } finally {
@@ -247,87 +224,63 @@ class HeartRateViewModel(
      * Takes approximately 30 seconds
      */
     fun measureHeartRateOnce() {
-        // Cancel any existing measurement
-        measurementJob?.cancel()
+        _error.value = null
+        _isMeasuring.value = true
+        _measurementProgress.value = 0
+        _instantHeartRate.value = null
 
+        measurementJob?.cancel()
         measurementJob = viewModelScope.launch {
             try {
-                _isMeasuring.value = true
-                _measurementProgress.value = 0
-                _error.value = null
-                _instantHeartRate.value = null
+                Log.d("HeartRateVM", "Manual measurement started")
 
-                var lastValidValue = 0
-                val startTime = System.currentTimeMillis()
+                BleOperateManager.getInstance().manualModeHeart({ result ->
+                    val hrValue = result.value.toInt()
+                    val errCode = result.errCode.toInt()
+                    Log.d("HeartRateVM", "Manual HR callback: value=$hrValue, err=$errCode")
 
-                // Start measurement
-                withContext(Dispatchers.IO) {
-                    healthMeasurements.measureHeartOnce()
-                }
-
-                // Monitor for 30 seconds
-                val totalDuration = 30000L // 30 seconds
-                val updateInterval = 300L // Update every 300ms
-
-                while (System.currentTimeMillis() - startTime < totalDuration) {
-                    if (!isActive) break
-
-                    // Update progress
-                    val elapsed = System.currentTimeMillis() - startTime
-                    _measurementProgress.value = ((elapsed * 100) / totalDuration).toInt().coerceAtMost(99)
-
-                    // Check for valid heart rate from live data
-                    val currentHR = _liveHealthData.value.heartRate
-                    if (currentHR > 0 && currentHR != lastValidValue) {
-                        lastValidValue = currentHR
-                        Log.d("HeartRateViewModel", "Captured HR: $currentHR")
+                    if (errCode == 0 && hrValue > 0) {
+                        _instantHeartRate.value = hrValue
+                        _liveHealthData.value = _liveHealthData.value.copy(heartRate = hrValue)
+                        Log.d("HeartRateVM", "Manual HR measured successfully: $hrValue bpm")
+                    } else {
+                        Log.d("HeartRateVM", "Manual HR measurement failed or invalid")
                     }
+                }, false)
 
-                    delay(updateInterval)
+                // Wait up to 30 seconds (typical measurement time)
+                for (i in 1..30) {
+                    delay(1000)
+                    _measurementProgress.value = i * 100 / 30
                 }
 
-                // Stop measurement on device
-                withContext(Dispatchers.IO) {
-                    healthMeasurements.stopHeartRateMeasurement()
+                // Stop measurement cleanly
+                BleOperateManager.getInstance().manualModeHeart(null, true)
+                Log.d("HeartRateVM", "Manual measurement stopped")
+
+                // ✅ Do NOT pull todayHeart here — keep manual result visible
+                if (_instantHeartRate.value == null || _instantHeartRate.value == 0) {
+                    _error.value = "No valid heart rate detected"
                 }
-
-                _measurementProgress.value = 100
-                delay(500)
-
-                // Use the last valid value received
-                if (lastValidValue > 0) {
-                    _instantHeartRate.value = lastValidValue
-                    Log.d("HeartRateViewModel", "Final measurement result: $lastValidValue BPM")
-                } else {
-                    _error.value = "No valid measurement received"
-                    Log.e("HeartRateViewModel", "Measurement failed - no valid value")
-                }
-
             } catch (e: Exception) {
                 _error.value = "Measurement failed: ${e.message}"
-                Log.e("HeartRateViewModel", "Measurement error: ${e.message}", e)
+                Log.e("HeartRateVM", "Error during manual measure", e)
             } finally {
                 _isMeasuring.value = false
                 _measurementProgress.value = 0
+                Log.d("HeartRateVM", "Manual measurement finished")
             }
         }
     }
+
 
     /**
      * Stop current measurement
      */
     fun stopMeasurement() {
         measurementJob?.cancel()
-        viewModelScope.launch {
-            try {
-                healthMeasurements.stopHeartRateMeasurement()
-                delay(500) // Wait for device to stop
-                _isMeasuring.value = false
-                _measurementProgress.value = 0
-            } catch (e: Exception) {
-                _error.value = "Failed to stop measurement: ${e.message}"
-            }
-        }
+        _isMeasuring.value = false
+        _measurementProgress.value = 0
     }
 
     /**
@@ -338,16 +291,9 @@ class HeartRateViewModel(
             try {
                 _isLoading.value = true
                 _error.value = null
-
-                // Get current interval or use default 30 minutes
                 val interval = _healthSettings.value.heartRateInterval.takeIf { it > 0 } ?: 30
-
-                // Send command to device
-                healthMonitorCore.toggleHeartRate(enabled, interval)
-
-                // Wait for device response
-                delay(1000)
-
+                toggleHeartRateInline(enabled, interval)
+                delay(600)
             } catch (e: Exception) {
                 _error.value = "Failed to toggle monitoring: ${e.message}"
             } finally {
@@ -383,11 +329,109 @@ class HeartRateViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        // Clean up if measurement is running
         measurementJob?.cancel()
-        if (_isMeasuring.value) {
-            healthMeasurements.stopHeartRateMeasurement()
+    }
+
+    // ================= Inline Data Sync Logic (from DataSynchronization) =================
+
+    private fun syncHeartRateDataInline() {
+        try {
+            val nowWithTz = getCurrentTimeWithTimezone()
+            commandHandle.executeReqCmd(
+                ReadHeartRateReq(nowWithTz.toLong()),
+                object : ICommandResponse<ReadHeartRateRsp> {
+                    override fun onDataResponse(resultEntity: ReadHeartRateRsp) {
+                        try {
+                            if (resultEntity.status == BaseRspCmd.RESULT_OK) {
+                                val data = convertHeartRateData(resultEntity)
+                                _todayHeart.value = data
+                            } else {
+                                _error.value = "Failed to sync heart rate (status=${resultEntity.status})"
+                            }
+                        } catch (e: Exception) {
+                            _error.value = "HR processing failed: ${e.message}"
+                        }
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            _error.value = "HR sync error: ${e.message}"
         }
+    }
+
+    private fun convertHeartRateData(response: ReadHeartRateRsp): HeartRateData {
+        val heartRateValues = mutableListOf<HeartRateEntry>()
+        response.getmHeartRateArray()?.let { hrArray ->
+            for (i in hrArray.indices) {
+                if (hrArray[i].toInt() > 0) {
+                    heartRateValues.add(
+                        HeartRateEntry(
+                            timestamp = response.getmUtcTime().toLong() + (i * 5 * 60),
+                            heartRate = hrArray[i].toInt(),
+                            minuteOfDay = i * 5
+                        )
+                    )
+                }
+            }
+        }
+        return HeartRateData(
+            date = getDateForOffset(0),
+            heartRateValues = heartRateValues,
+            averageHeartRate = if (heartRateValues.isNotEmpty()) heartRateValues.map { it.heartRate }.average().toInt() else 0,
+            maxHeartRate = heartRateValues.maxOfOrNull { it.heartRate } ?: 0,
+            minHeartRate = heartRateValues.minOfOrNull { it.heartRate } ?: 0
+        )
+    }
+
+    private fun getCurrentTimeWithTimezone(): Int {
+        return try {
+            val timeZone = java.util.TimeZone.getDefault().rawOffset / (1000 * 60 * 60)
+            val currentTime = System.currentTimeMillis() / 1000
+            (timeZone * 3600 + currentTime).toInt()
+        } catch (_: Exception) { 0 }
+    }
+
+    private fun getDateForOffset(offset: Int): String {
+        val calendar = java.util.Calendar.getInstance()
+        calendar.add(java.util.Calendar.DAY_OF_YEAR, -offset)
+        val format = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        return format.format(calendar.time)
+    }
+
+    private fun readHeartRateSettingsInline() {
+        try {
+            commandHandle.executeReqCmd(
+                HeartRateSettingReq.getReadInstance(),
+                object : ICommandResponse<HeartRateSettingRsp> {
+                    override fun onDataResponse(resultEntity: HeartRateSettingRsp) {
+                        if (resultEntity.status == BaseRspCmd.RESULT_OK) {
+                            _healthSettings.value = _healthSettings.value.copy(
+                                heartRateEnabled = resultEntity.isEnable,
+                                heartRateInterval = resultEntity.heartInterval
+                            )
+                        }
+                    }
+                }
+            )
+        } catch (_: Exception) { }
+    }
+
+    private fun toggleHeartRateInline(enabled: Boolean, interval: Int) {
+        try {
+            commandHandle.executeReqCmd(
+                HeartRateSettingReq.getWriteInstance(enabled, interval),
+                object : ICommandResponse<HeartRateSettingRsp> {
+                    override fun onDataResponse(resultEntity: HeartRateSettingRsp) {
+                        if (resultEntity.status == BaseRspCmd.RESULT_OK) {
+                            _healthSettings.value = _healthSettings.value.copy(
+                                heartRateEnabled = enabled,
+                                heartRateInterval = interval
+                            )
+                        }
+                    }
+                }
+            )
+        } catch (_: Exception) { }
     }
 }
 

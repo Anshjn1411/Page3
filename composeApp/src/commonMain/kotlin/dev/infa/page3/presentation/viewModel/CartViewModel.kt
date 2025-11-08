@@ -24,6 +24,8 @@ class CartViewModel(
 
     private val _cartActionState = MutableStateFlow<OperationUiState>(OperationUiState.Idle)
     val cartActionState: StateFlow<OperationUiState> = _cartActionState.asStateFlow()
+    private val _totalItems = MutableStateFlow(0)
+    val totalItems: StateFlow<Int> = _totalItems.asStateFlow()
 
     init {
         println("CartViewModel initialized")
@@ -37,6 +39,7 @@ class CartViewModel(
             try {
                 val items = cartRepository.cartItems.value
                 println("Cart items loaded: ${items.size}")
+                _totalItems.value = items.size
                 _cartState.value = if (items.isEmpty()) {
                     println("Cart is empty")
                     ListUiState.Empty

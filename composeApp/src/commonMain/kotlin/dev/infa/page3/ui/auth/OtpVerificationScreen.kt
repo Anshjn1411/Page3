@@ -56,8 +56,6 @@ import dev.infa.page3.presentation.api.ApiService
 import dev.infa.page3.presentation.repositary.AuthRepository
 import dev.infa.page3.presentation.uiSatateClaases.AuthUiState
 import dev.infa.page3.presentation.viewModel.AuthViewModel
-import dev.infa.page3.ui.theme.customShapes
-import dev.infa.page3.ui.theme.customTextStyles
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import page3.composeapp.generated.resources.Res

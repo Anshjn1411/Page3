@@ -78,7 +78,7 @@ fun BottomNavBar(
             unselectedIcon = Icons.Outlined.Settings,
             selected = currentNav == "setting",
             onClick = {
-                navController.navigate(Routes.Setting)
+                navController.navigate(Routes.Profile)
             }
         )
     }

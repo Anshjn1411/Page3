@@ -6,13 +6,10 @@ package dev.infa.page3.platform
  */
 expect class DeviceSDKLauncher(context: Any) {
     val context: Any
-    
-    /**
-     * Opens the device management screen with BLE SDK functionality
-     * This will launch the Android Activity containing all SDK logic
-     */
+
+
     fun openDeviceManager()
-    
+
     /**
      * Checks if the device SDK is available on this platform
      * @return true if SDK is available, false otherwise

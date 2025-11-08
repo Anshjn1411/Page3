@@ -72,9 +72,9 @@ fun CategoryCard(
 
             // Description if category matches
             val description = when (category.name.lowercase()) {
-                "women" -> "Trendy outfits and accessories for women"
-                "men" -> "Stylish clothing and essentials for men"
-                "gadgets" -> "Latest gadgets and tech must-haves"
+                "women" -> "Trendy outfits for women"
+                "men" -> "Stylish clothing for men"
+                "gadgets" -> "Latest gadgets must-haves"
                 else -> null
             }
 

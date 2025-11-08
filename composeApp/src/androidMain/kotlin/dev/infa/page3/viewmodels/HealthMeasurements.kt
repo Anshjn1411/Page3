@@ -101,7 +101,7 @@ class HealthMeasurements(
     }
 
     fun measureTemperatureOnce() {
-        if (!deviceCapabilities().supportsTemperature) {
+        if (!deviceCapabilities().supportTemperature) {
             addLog("ERROR: Device does not support temperature monitoring")
             return
         }
@@ -122,7 +122,7 @@ class HealthMeasurements(
 
     // Enhanced One-Key Detection
     fun performOneKeyMeasurement() {
-        if (!deviceCapabilities().supportsOneKeyCheck) {
+        if (!deviceCapabilities().supportOneKeyCheck) {
             addLog("ERROR: Device does not support one-key measurement")
             return
         }
@@ -309,7 +309,7 @@ class HealthMeasurements(
             delay(2000)
             measurePressureOnce()
 
-            if (deviceCapabilities().supportsTemperature) {
+            if (deviceCapabilities().supportTemperature) {
                 delay(2000)
                 measureTemperatureOnce()
             }
@@ -318,17 +318,5 @@ class HealthMeasurements(
         }
     }
 
-    fun stopAllMeasurements() {
-        addLog("Stopping all active measurements...")
 
-        stopHeartRateMeasurement()
-        stopBloodPressureMeasurement()
-        stopBloodOxygenMeasurement()
-        stopHrvMeasurement()
-        stopPressureMeasurement()
-        stopTemperatureMeasurement()
-        stopOneKeyMeasurement()
-
-        addLog("All measurements stopped")
-    }
 }

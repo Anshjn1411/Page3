@@ -312,7 +312,7 @@ class HealthMonitorCore(
     }
 
     fun toggleTemperatureSettings(enabled: Boolean) {
-        if (!deviceCapabilities.supportsTemperature) {
+        if (!deviceCapabilities.supportTemperature) {
             addLog("ERROR: Device does not support temperature monitoring")
             return
         }

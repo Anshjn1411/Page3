@@ -31,6 +31,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import android.util.Log
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Battery3Bar
+import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -39,224 +45,107 @@ import dev.infa.page3.ui.components.AppSideBar
 import dev.infa.page3.ui.components.BottomNavBar
 import dev.infa.page3.ui.components.TopBarScreen
 import dev.infa.page3.viewmodels.ConnectionViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ConnectScreen(
-    viewModel: ConnectionViewModel,
+fun ScannerScreen(
+    connectionViewModel: ConnectionViewModel,
     navController: NavController
 ) {
-    var currentTab by remember { mutableStateOf("setting") }
+    val uiState by connectionViewModel.uiState.collectAsState()
+    val isScanning = uiState.isScanning
+    val discoveredDevices = uiState.devices
+    val isConnecting = uiState.isConnecting
 
-    // Collect all state from ViewModel
-    val isScanning by viewModel.isScanning.collectAsState()
-    val isConnected by viewModel.isConnected.collectAsState()
-    val isConnecting by viewModel.isConnecting.collectAsState()
-    val deviceName by viewModel.deviceName.collectAsState()
-    val deviceAddress by viewModel.deviceAddress.collectAsState()
-    val discoveredDevices by viewModel.discoveredDevices.collectAsState()
-    val selectedDevice by remember { mutableStateOf(SmartWatch("" ,"", 0,"")) }
-    val connectionStatus by viewModel.connectionStatus.collectAsState()
+    // Auto-navigate back if connected
+    LaunchedEffect(uiState.isConnected) {
+        if (uiState.isConnected) {
+            navController.popBackStack()
+        }
+    }
 
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "Scan Devices",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = {
+                        connectionViewModel.stopScan()
+                        navController.popBackStack()
+                    }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+            )
+        },
+        containerColor = Color(0xFFF5F5F5)
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            // Scan Control Card
+            ScanControlCard(
+                isScanning = isScanning,
+                onStartScan = { connectionViewModel.startScan() },
+                onStopScan = { connectionViewModel.stopScan() }
+            )
 
-    ModalNavigationDrawer(
-        drawerContent = { AppSideBar(navController) },
-        drawerState = drawerState
-    ) {
-        Scaffold(
-            topBar = {
-                TopBarScreen(onClickMenu = { scope.launch { drawerState.open() } })
-            },
-            bottomBar = {
-                BottomNavBar(currentNav = currentTab, navController)
-            },
-            containerColor = Color(0xFFF5F5F5)
-        ) { innerPadding ->
+            // Available Devices
+            if (discoveredDevices.isNotEmpty()) {
+                AvailableDevicesList(
+                    devices = discoveredDevices,
+                    onConnect = { device ->
+                        connectionViewModel.connectToDevice(device)
+                    }
+                )
+            } else if (!isScanning) {
+                EmptyDeviceState()
+            }
+
+            if (isScanning) {
+                ScanningIndicator()
+            }
+        }
+        // ✅ Show full-screen loader when connecting
+        if (isConnecting) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding)
+                    .background(Color.Black.copy(alpha = 0.4f)),
+                contentAlignment = Alignment.Center
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color(0xFFF5F5F5))
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(20.dp)
-                ) {
-                    // Connected Device Section
-                    if (isConnected) {
-                        ConnectedDeviceCard(
-                            deviceName = deviceName,
-                            deviceAddress = deviceAddress,
-                            connectionStatus = connectionStatus,
-                            onDisconnect = { viewModel.disconnectDevice() }
-                        )
-                    } else {
-                        // Scan Controls Section
-                        ScanControlCard(
-                            isScanning = isScanning,
-                            onStartScan = { viewModel.startScanning() },
-                            onStopScan = { viewModel.stopScanning() }
-                        )
-                    }
-
-                    // Available Devices Section
-                    if (discoveredDevices.isNotEmpty() && !isConnected) {
-                        AvailableDevicesList(
-                            devices = discoveredDevices,
-                            selectedDevice = selectedDevice,
-                            onSelectDevice = { s-> viewModel.connectToDevice(s)  },
-                            onConnectDevice = { s-> viewModel.connectToDevice(s) }
-                        )
-                    } else if (!isScanning && !isConnected && discoveredDevices.isEmpty()) {
-                        EmptyDeviceState()
-                    }
-
-                    if (isScanning) {
-                        ScanningIndicator()
-                    }
-                }
-
-                // Connecting Overlay
-                if (isConnecting) {
-                    ConnectingOverlay(deviceName = deviceName)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ConnectedDeviceCard(
-    deviceName: String,
-    deviceAddress: String,
-    connectionStatus: String,
-    onDisconnect: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
-        ) {
-            // Header with status
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "CONNECTED DEVICE",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF666666),
-                    letterSpacing = 1.2.sp,
-                    fontWeight = FontWeight.Medium
-                )
-
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF4CAF50).copy(alpha = 0.15f))
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF4CAF50))
-                        )
-                        Text(
-                            text = "Active",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFF4CAF50),
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-            }
-
-            Divider(color = Color(0xFFE0E0E0), thickness = 1.dp)
-
-            // Device Info
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = deviceName,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1A1A1A)
-                )
-                Text(
-                    text = deviceAddress,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF666666)
-                )
-            }
-
-            // Signal Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A2A)),
-                shape = RoundedCornerShape(12.dp),
-                elevation = CardDefaults.cardElevation(0.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.SignalCellularAlt,
-                        contentDescription = null,
-                        tint = Color(0xFF4CAF50),
-                        modifier = Modifier.size(24.dp)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        strokeWidth = 4.dp,
+                        modifier = Modifier.size(48.dp)
                     )
-                    Column {
-                        Text(
-                            text = connectionStatus,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Text(
-                            text = "Signal Strong",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFFCCCCCC)
-                        )
-                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Connecting...",
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
-            }
-
-            // Disconnect Button
-            Button(
-                onClick = onDisconnect,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF3B30)),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.LinkOff,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Disconnect Device", fontWeight = FontWeight.SemiBold)
             }
         }
     }
 }
+
 
 @Composable
 private fun ScanControlCard(
@@ -316,9 +205,7 @@ private fun ScanControlCard(
 @Composable
 private fun AvailableDevicesList(
     devices: List<SmartWatch>,
-    selectedDevice: SmartWatch?,
-    onSelectDevice: (SmartWatch) -> Unit,
-    onConnectDevice: (SmartWatch) -> Unit
+    onConnect: (SmartWatch) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
@@ -333,9 +220,7 @@ private fun AvailableDevicesList(
             items(devices) { device ->
                 DeviceListItem(
                     device = device,
-                    isConnected = false,
-                    onSelect = { onSelectDevice(device) },
-                    onConnect ={ onConnectDevice(device) }
+                    onConnect = { onConnect(device) }
                 )
             }
         }
@@ -413,53 +298,16 @@ private fun ScanningIndicator() {
 }
 
 @Composable
-private fun ConnectingOverlay(deviceName: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.White.copy(alpha = 0.95f))
-            .clickable(enabled = false) { },
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            CircularProgressIndicator(
-                color = Color(0xFF1A1A1A),
-                strokeWidth = 4.dp,
-                modifier = Modifier.size(48.dp)
-            )
-            Text(
-                text = "Connecting...",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF1A1A1A)
-            )
-            Text(
-                text = deviceName,
-                style = MaterialTheme.typography.bodyLarge,
-                color = Color(0xFF666666)
-            )
-        }
-    }
-}
-
-@Composable
 fun DeviceListItem(
     device: SmartWatch,
-    isConnected: Boolean,
-    onSelect: () -> Unit,
     onConnect: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onSelect() },
+            .clickable { },
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        ),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
         shape = RoundedCornerShape(12.dp)
     ) {
         Row(
@@ -474,7 +322,6 @@ fun DeviceListItem(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Device Icon
                 Box(
                     modifier = Modifier
                         .size(48.dp)
@@ -535,19 +382,76 @@ fun DeviceListItem(
     }
 }
 
+// ==================== Shared Components ====================
 @Composable
-fun getSignalColor(rssi: Int): Color {
-    return when {
-        rssi > -60 -> Color(0xFF4CAF50)
-        rssi > -80 -> Color(0xFFFFC107)
-        else -> Color(0xFFFF3B30)
+public fun ConnectionRequiredAlert() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.5f))
+            .clickable { },
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier
+                .padding(32.dp)
+                .fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .background(Color(0xFFFFEBEE), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LinkOff,
+                        contentDescription = null,
+                        tint = Color(0xFFFF3B30),
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+                Text(
+                    text = "Device Not Connected",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1A1A1A)
+                )
+                Text(
+                    text = "Please connect to a device first",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFF666666),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
     }
 }
 
+
+
+
+// Helper functions
 fun getSignalStrength(rssi: Int): String {
     return when {
-        rssi > -60 -> "Excellent"
-        rssi > -80 -> "Good"
+        rssi >= -50 -> "Excellent"
+        rssi >= -60 -> "Good"
+        rssi >= -70 -> "Fair"
         else -> "Weak"
+    }
+}
+
+fun getSignalColor(rssi: Int): Color {
+    return when {
+        rssi >= -50 -> Color(0xFF4CAF50)
+        rssi >= -60 -> Color(0xFF8BC34A)
+        rssi >= -70 -> Color(0xFFFFC107)
+        else -> Color(0xFFFF5722)
     }
 }

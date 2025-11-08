@@ -31,6 +31,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.infa.page3.viewmodels.BloodOxygenViewModel
+import android.util.Log
+import androidx.compose.material.icons.filled.BubbleChart
 import dev.infa.page3.viewmodels.HeartRateViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -42,46 +44,29 @@ fun BloodOxygenScreen(
     viewModel: BloodOxygenViewModel,
     onNavigateBack: () -> Unit
 ) {
-    // Collect all states
+    // Collect states
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
     val isMeasuring by viewModel.isMeasuring.collectAsState()
     val measurementProgress by viewModel.measurementProgress.collectAsState()
-
-    // Live data from device
     val currentBloodOxygen by viewModel.currentBloodOxygen.collectAsState()
     val liveHealthData by viewModel.liveHealthData.collectAsState()
     val instantBloodOxygen by viewModel.instantBloodOxygen.collectAsState()
-
-    // Statistics (dynamic from actual data)
-    val averageBO by viewModel.averageBloodOxygen.collectAsState()
-    val minBO by viewModel.minBloodOxygen.collectAsState()
-    val maxBO by viewModel.maxBloodOxygen.collectAsState()
-
-    // All readings
+    val averageSpO2 by viewModel.averageBloodOxygen.collectAsState()
+    val minSpO2 by viewModel.minBloodOxygen.collectAsState()
+    val maxSpO2 by viewModel.maxBloodOxygen.collectAsState()
     val allReadings by viewModel.allReadings.collectAsState()
     val intervalReadings by viewModel.intervalReadings.collectAsState()
-
-    // Monitoring settings
     val isMonitoringEnabled by viewModel.isMonitoringEnabled.collectAsState()
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Blood Oxygen") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = { viewModel.refresh() },
-                        enabled = !isLoading && !isMeasuring
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
-                    }
-                }
+            HealthTopBar(
+                title = "Blood Oxygen (SpO₂)",
+                onNavigateBack = onNavigateBack,
+                onRefresh = { viewModel.refresh() },
+                isLoading = isLoading,
+                isMeasuring = isMeasuring
             )
         }
     ) { padding ->
@@ -92,477 +77,117 @@ fun BloodOxygenScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Live Blood Oxygen Display (from device)
+            // Current SpO₂ Display
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Air,
-                                contentDescription = null,
-                                tint = Color(0xFF2196F3),
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = when {
-                                    isMeasuring -> "Measuring..."
-                                    instantBloodOxygen != null && instantBloodOxygen!! > 0 -> "Latest Measurement"
-                                    liveHealthData.spo2 > 0 -> "Live"
-                                    else -> "Current"
-                                },
-                                style = MaterialTheme.typography.labelMedium,
-                                color = when {
-                                    isMeasuring -> Color(0xFFFF9800)
-                                    liveHealthData.spo2 > 0 -> Color(0xFF4CAF50)
-                                    else -> Color(0xFF666666)
-                                }
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Text(
-                            text = currentBloodOxygen.toString(),
-                            fontSize = 72.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF2196F3)
-                        )
-
-                        Text(
-                            text = "%",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Color.Gray
-                        )
-
-                        // Show status indicator
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        when {
-                            isMeasuring -> {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(16.dp),
-                                        strokeWidth = 2.dp,
-                                        color = Color(0xFFFF9800)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Measuring: $measurementProgress%",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = Color(0xFFFF9800)
-                                    )
-                                }
-                            }
-                            instantBloodOxygen != null && instantBloodOxygen!! > 0 -> {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.CheckCircle,
-                                        contentDescription = null,
-                                        tint = Color(0xFF4CAF50),
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "Measurement complete",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = Color(0xFF4CAF50)
-                                    )
-                                }
-                            }
-                            liveHealthData.spo2 > 0 -> {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(8.dp)
-                                            .background(
-                                                Color(0xFF4CAF50),
-                                                shape = CircleShape
-                                            )
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "Receiving live data",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = Color(0xFF4CAF50)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
+                HealthValueCard(
+                    currentValue = currentBloodOxygen,
+                    unit = "%",
+                    icon = Icons.Default.BubbleChart, // or any suitable icon
+                    iconColor = HealthColors.PrimarySpO2,
+                    valueColor = HealthColors.PrimarySpO2,
+                    isMeasuring = isMeasuring,
+                    measurementProgress = measurementProgress,
+                    instantValue = instantBloodOxygen,
+                    liveValue = liveHealthData.spo2
+                )
             }
 
-            // Instant Measurement Section
+            // Instant Measurement
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F9FA)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(
-                                    text = "Instant Measurement",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "Takes ~30 seconds",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFF666666)
-                                )
-                            }
-
-                            if (instantBloodOxygen != null && instantBloodOxygen!! > 0) {
-                                IconButton(onClick = { viewModel.clearInstantMeasurement() }) {
-                                    Icon(
-                                        Icons.Default.Close,
-                                        contentDescription = "Clear",
-                                        tint = Color(0xFF666666)
-                                    )
-                                }
-                            }
-                        }
-
-                        // Progress bar during measurement
-                        if (isMeasuring) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                LinearProgressIndicator(
-                                    progress = measurementProgress / 100f,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    color = Color(0xFFFF9800),
-                                    trackColor = Color(0xFFFFE0B2)
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "$measurementProgress% - Please wait...",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFF666666),
-                                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                                )
-                            }
-                        }
-
-                        Button(
-                            onClick = {
-                                if (isMeasuring) {
-                                    viewModel.stopMeasurement()
-                                } else {
-                                    viewModel.measureBloodOxygenOnce()
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !isLoading,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isMeasuring)
-                                    Color(0xFFFF5722) else Color(0xFF2196F3)
-                            ),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isMeasuring)
-                                    Icons.Default.Close else Icons.Default.Air,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = if (isMeasuring) "Stop Measuring" else "Measure Now",
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-                }
+                InstantMeasurementCard(
+                    title = "Instant Measurement",
+                    subtitle = "Takes ~30 seconds",
+                    isMeasuring = isMeasuring,
+                    measurementProgress = measurementProgress,
+                    isLoading = isLoading,
+                    buttonColor = HealthColors.PrimarySpO2,
+                    buttonIcon = Icons.Default.BubbleChart,
+                    onMeasure = { viewModel.measureBloodOxygenOnce() },
+                    onStop = { viewModel.stopMeasurement() },
+                    onClear = { viewModel.clearInstantMeasurement() },
+                    showClearButton = instantBloodOxygen != null && instantBloodOxygen!! > 0
+                )
             }
 
-            // Continuous Monitoring Section
+            // Continuous Monitoring
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F9FA)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(
-                                    text = "Continuous Monitoring",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "Auto monitoring at 30-min intervals",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFF666666)
-                                )
-                            }
-                            Switch(
-                                checked = isMonitoringEnabled,
-                                onCheckedChange = { enabled ->
-                                    viewModel.toggleContinuousMonitoring(enabled)
-                                },
-                                enabled = !isLoading && !isMeasuring,
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
-                                    checkedTrackColor = Color(0xFF4CAF50)
-                                )
-                            )
-                        }
-
-                        if (isMonitoringEnabled) {
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = Color(0xFF4CAF50).copy(alpha = 0.1f)
-                                )
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.CheckCircle,
-                                        contentDescription = null,
-                                        tint = Color(0xFF4CAF50),
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Active - 30min interval",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = Color(0xFF4CAF50),
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
+                ContinuousMonitoringCard(
+                    title = "Continuous Monitoring",
+                    subtitle = "Auto monitoring at 30-min intervals",
+                    intervalMinutes = 30,
+                    isEnabled = isMonitoringEnabled,
+                    isLoading = isLoading,
+                    isMeasuring = isMeasuring,
+                    onToggle = { viewModel.toggleContinuousMonitoring(it) }
+                )
             }
 
             // Statistics
-            if (averageBO > 0 || minBO > 0 || maxBO > 0) {
+            if (averageSpO2 > 0 || minSpO2 > 0 || maxSpO2 > 0) {
                 item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        StatCard(
-                            modifier = Modifier.weight(1f),
-                            label = "Average",
-                            value = if (averageBO > 0) "$averageBO%" else "--",
-                            icon = Icons.Default.Air,
-                            color = Color(0xFF2196F3)
+                    StatisticsRow(
+                        stats = listOf(
+                            StatItem(
+                                label = "Average",
+                                value = if (averageSpO2 > 0) "$averageSpO2%" else "--",
+                                icon = Icons.Default.FavoriteBorder,
+                                color = HealthColors.PrimarySpO2
+                            ),
+                            StatItem(
+                                label = "Minimum",
+                                value = if (minSpO2 > 0) "$minSpO2%" else "--",
+                                icon = Icons.Default.ArrowDownward,
+                                color = HealthColors.Success
+                            ),
+                            StatItem(
+                                label = "Maximum",
+                                value = if (maxSpO2 > 0) "$maxSpO2%" else "--",
+                                icon = Icons.Default.ArrowUpward,
+                                color = HealthColors.Danger
+                            )
                         )
-                        StatCard(
-                            modifier = Modifier.weight(1f),
-                            label = "Minimum",
-                            value = if (minBO > 0) "$minBO%" else "--",
-                            icon = Icons.Default.ArrowDownward,
-                            color = Color(0xFFFF9800)
-                        )
-                        StatCard(
-                            modifier = Modifier.weight(1f),
-                            label = "Maximum",
-                            value = if (maxBO > 0) "$maxBO%" else "--",
-                            icon = Icons.Default.ArrowUpward,
-                            color = Color(0xFF4CAF50)
-                        )
-                    }
+                    )
                 }
             }
 
-            // Blood Oxygen Chart
+            // SpO₂ Chart
             if (intervalReadings.isNotEmpty()) {
                 item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = "30-Minute Intervals",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "${intervalReadings.size} readings",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF666666)
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            Canvas(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(200.dp)
-                                    .padding(8.dp)
-                            ) {
-                                if (intervalReadings.size >= 2) {
-                                    val maxValue = intervalReadings.maxOf { it.bloodOxygen }.coerceAtLeast(1)
-                                    val minValue = intervalReadings.minOf { it.bloodOxygen }
-                                    val range = (maxValue - minValue).coerceAtLeast(1)
-                                    val stepX = size.width / (intervalReadings.size - 1).toFloat()
-
-                                    var prevX = 0f
-                                    var prevY = size.height
-
-                                    intervalReadings.forEachIndexed { index, reading ->
-                                        val x = index * stepX
-                                        val normalized = (reading.bloodOxygen - minValue).toFloat() / range.toFloat()
-                                        val y = size.height - (normalized * size.height)
-
-                                        if (index > 0) {
-                                            drawLine(
-                                                color = Color(0xFF2196F3),
-                                                start = androidx.compose.ui.geometry.Offset(prevX, prevY),
-                                                end = androidx.compose.ui.geometry.Offset(x, y),
-                                                strokeWidth = 6f,
-                                                cap = StrokeCap.Round
-                                            )
-                                        }
-
-                                        drawCircle(
-                                            color = Color(0xFF2196F3),
-                                            radius = 5f,
-                                            center = androidx.compose.ui.geometry.Offset(x, y)
-                                        )
-
-                                        prevX = x
-                                        prevY = y
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    ChartCard(
+                        title = "30-Minute Intervals",
+                        readingsCount = intervalReadings.size,
+                        readings = intervalReadings,
+                        getValue = { it.bloodOxygen },
+                        chartColor = HealthColors.PrimarySpO2
+                    )
                 }
             }
 
             // All Readings List
-            if (allReadings.isNotEmpty() && allReadings.size > intervalReadings.size) {
+            if (allReadings.isNotEmpty()) {
                 item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = "All Readings (${allReadings.size} total)",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            allReadings.takeLast(10).reversed().forEach { reading ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                                            .format(Date(reading.timestamp)),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = Color(0xFF666666)
-                                    )
-                                    Text(
-                                        text = "${reading.bloodOxygen}%",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = Color(0xFF2196F3)
-                                    )
-                                }
-                                if (reading != allReadings.takeLast(10).reversed().last()) {
-                                    Divider(color = Color(0xFFE0E0E0))
-                                }
-                            }
-
-                            if (allReadings.size > 10) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "Showing last 10 of ${allReadings.size} readings",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFF999999),
-                                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                                )
-                            }
-                        }
-                    }
+                    ReadingsListCard(
+                        title = "Recent Readings",
+                        totalCount = allReadings.size,
+                        readings = allReadings,
+                        maxDisplay = 10,
+                        getTimestamp = { it.timestamp },
+                        getValue = { it.bloodOxygen },
+                        unit = "%",
+                        valueColor = HealthColors.PrimarySpO2,
+                        timeFormat = "MMM dd, HH:mm"
+                    )
                 }
             }
 
             // Empty State
             if (intervalReadings.isEmpty() && !isLoading && !isMeasuring) {
                 item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F9FA))
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Air,
-                                contentDescription = null,
-                                tint = Color(0xFFCCCCCC),
-                                modifier = Modifier.size(64.dp)
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "No blood oxygen data",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = Color(0xFF666666)
-                            )
-                            Text(
-                                text = "Enable monitoring or measure now",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF999999)
-                            )
-                        }
-                    }
+                    EmptyStateCard(
+                        icon = Icons.Default.BubbleChart,
+                        title = "No SpO₂ data",
+                        subtitle = "Enable monitoring or measure now"
+                    )
                 }
             }
 
@@ -571,45 +196,18 @@ fun BloodOxygenScreen(
                 item {
                     LinearProgressIndicator(
                         modifier = Modifier.fillMaxWidth(),
-                        color = Color(0xFF2196F3)
+                        color = HealthColors.PrimarySpO2
                     )
                 }
             }
 
             // Error Display
-            if (error != null) {
+            error?.let { errorMessage ->
                 item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = Color(0xFFFFEBEE)
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Error,
-                                contentDescription = null,
-                                tint = Color(0xFFE74C3C)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = error ?: "",
-                                color = Color(0xFFE74C3C),
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.weight(1f)
-                            )
-                            IconButton(onClick = { viewModel.clearError() }) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Dismiss",
-                                    tint = Color(0xFFE74C3C)
-                                )
-                            }
-                        }
-                    }
+                    ErrorCard(
+                        message = errorMessage,
+                        onDismiss = { viewModel.clearError() }
+                    )
                 }
             }
         }

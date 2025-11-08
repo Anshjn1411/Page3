@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -52,12 +53,13 @@ import dev.infa.page3.data.model.CreateOrderRequest
 import dev.infa.page3.data.remote.SessionManager
 import dev.infa.page3.presentation.api.ApiService
 import dev.infa.page3.presentation.repositary.OrderRepository
+import dev.infa.page3.presentation.repository.UserRepository
 import dev.infa.page3.presentation.uiSatateClaases.ListUiState
 import dev.infa.page3.presentation.uiSatateClaases.SingleUiState
+import dev.infa.page3.presentation.viewModel.AuthViewModel
 import dev.infa.page3.presentation.viewModel.CartViewModel
 import dev.infa.page3.presentation.viewModel.OrderViewModel
 import dev.infa.page3.presentation.viewModel.ProductViewModel
-import dev.infa.page3.ui.productscreen.PaymentRedirectDialog
 import dev.infa.page3.ui.productscreen.openUrl
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -65,15 +67,20 @@ import dev.infa.page3.ui.productscreen.openUrl
 fun CheckoutScreenContent(
     navigator: Navigator,
     cartViewModel: CartViewModel,
-    productViewModel: ProductViewModel
+    productViewModel: ProductViewModel,
 ) {
     val orderViewModel: OrderViewModel = remember {
         OrderViewModel(OrderRepository(ApiService(), SessionManager()))
     }
 
+    val userRepository = remember { UserRepository() }
+    val savedUserData = remember { userRepository.getUserData() }
+
     val orderCreationState by orderViewModel.orderCreationState.collectAsState()
     val paymentLinkState by orderViewModel.paymentLinkState.collectAsState()
     val cartState by cartViewModel.cartState.collectAsState()
+
+    var useSameAsBilling by remember { mutableStateOf(false) }
 
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
@@ -88,13 +95,35 @@ fun CheckoutScreenContent(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showSuccessDialog by remember { mutableStateOf(false) }
 
+    // Auto-fill if using same as billing
+    LaunchedEffect(useSameAsBilling) {
+        if (useSameAsBilling && savedUserData != null) {
+            val billing = savedUserData.billingAddress
+            firstName = billing.first_name ?: ""
+            lastName = billing.last_name ?: ""
+            streetAddress = billing.address_1 ?: ""
+            city = billing.city ?: ""
+            state = billing.state ?: ""
+            zipCode = billing.postcode ?: ""
+            mobile = billing.phone ?: ""
+        } else if (!useSameAsBilling) {
+            // Clear fields when unchecked
+            firstName = ""
+            lastName = ""
+            streetAddress = ""
+            city = ""
+            state = ""
+            zipCode = ""
+            mobile = ""
+        }
+    }
+
     // Handle payment link state
     LaunchedEffect(paymentLinkState) {
         when (paymentLinkState) {
             is SingleUiState.Success -> {
                 val paymentUrl = (paymentLinkState as SingleUiState.Success).data.payment_link_url
                 isLoading = false
-                // Open payment URL using platform-specific implementation
                 openUrl(paymentUrl)
                 showSuccessDialog = true
             }
@@ -139,6 +168,48 @@ fun CheckoutScreenContent(
                     fontWeight = FontWeight.Bold
                 )
 
+                // Show "Same as Billing" option only if billing address exists
+                if (savedUserData?.billingAddress != null) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { useSameAsBilling = !useSameAsBilling },
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (useSameAsBilling)
+                                MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surface
+                        ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = useSameAsBilling,
+                                onCheckedChange = { useSameAsBilling = it }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = "Use Billing Address",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Ship to the same address as billing",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
                 // First Name
                 OutlinedTextField(
                     value = firstName,
@@ -146,7 +217,7 @@ fun CheckoutScreenContent(
                     label = { Text("First Name") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    enabled = !isLoading
+                    enabled = !isLoading && !useSameAsBilling
                 )
 
                 // Last Name
@@ -156,7 +227,7 @@ fun CheckoutScreenContent(
                     label = { Text("Last Name") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    enabled = !isLoading
+                    enabled = !isLoading && !useSameAsBilling
                 )
 
                 // Street Address
@@ -167,7 +238,7 @@ fun CheckoutScreenContent(
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2,
                     maxLines = 3,
-                    enabled = !isLoading
+                    enabled = !isLoading && !useSameAsBilling
                 )
 
                 // City
@@ -177,7 +248,7 @@ fun CheckoutScreenContent(
                     label = { Text("City") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    enabled = !isLoading
+                    enabled = !isLoading && !useSameAsBilling
                 )
 
                 // State
@@ -187,7 +258,7 @@ fun CheckoutScreenContent(
                     label = { Text("State") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    enabled = !isLoading
+                    enabled = !isLoading && !useSameAsBilling
                 )
 
                 // Zip Code
@@ -198,7 +269,7 @@ fun CheckoutScreenContent(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    enabled = !isLoading
+                    enabled = !isLoading && !useSameAsBilling
                 )
 
                 // Mobile
@@ -209,7 +280,7 @@ fun CheckoutScreenContent(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    enabled = !isLoading,
+                    enabled = !isLoading && !useSameAsBilling,
                     prefix = { Text("+91 ") }
                 )
 
@@ -230,10 +301,11 @@ fun CheckoutScreenContent(
                         .fillMaxWidth()
                         .clickable { selectedPaymentMethod = "cod" },
                     colors = CardDefaults.cardColors(
-                        containerColor = if (selectedPaymentMethod == "cod") 
-                            MaterialTheme.colorScheme.primaryContainer 
+                        containerColor = if (selectedPaymentMethod == "cod")
+                            MaterialTheme.colorScheme.primaryContainer
                         else MaterialTheme.colorScheme.surface
-                    )
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Row(
                         modifier = Modifier
@@ -283,12 +355,12 @@ fun CheckoutScreenContent(
                 Button(
                     onClick = {
                         errorMessage = null
-                        
+
                         if (selectedPaymentMethod.isEmpty()) {
                             errorMessage = "Please select a payment method"
                             return@Button
                         }
-                        
+
                         val address = CreateOrderRequest(
                             firstName = firstName,
                             lastName = lastName,
@@ -302,17 +374,16 @@ fun CheckoutScreenContent(
                         if (validateAddress(address)) {
                             // For COD, create order directly
                             if (selectedPaymentMethod == "cod") {
-                                // Get cart items from cart state
                                 val cartItems = when (cartState) {
                                     is ListUiState.Success -> (cartState as ListUiState.Success<CartItemWithAttributes>).data
                                     else -> emptyList()
                                 }
-                                
+
                                 if (cartItems.isEmpty()) {
                                     errorMessage = "Your cart is empty. Please add items to cart first."
                                     return@Button
                                 }
-                                
+
                                 orderViewModel.createCodOrder(
                                     address = address,
                                     cartItems = cartItems,
@@ -324,17 +395,16 @@ fun CheckoutScreenContent(
                                     }
                                 )
                             } else {
-                                // Get cart items for other payment methods too
                                 val cartItems = when (cartState) {
                                     is ListUiState.Success -> (cartState as ListUiState.Success<CartItemWithAttributes>).data
                                     else -> emptyList()
                                 }
-                                
+
                                 if (cartItems.isEmpty()) {
                                     errorMessage = "Your cart is empty. Please add items to cart first."
                                     return@Button
                                 }
-                                
+
                                 orderViewModel.buyNow(
                                     address = address,
                                     cartItems = cartItems,
@@ -399,10 +469,11 @@ fun CheckoutScreenContent(
 
         // Success Dialog
         if (showSuccessDialog) {
-            OrderSuccessScreenContent(navigator )
+            OrderSuccessScreenContent(navigator)
         }
     }
 }
+
 
 private fun validateAddress(address: CreateOrderRequest): Boolean {
     return address.firstName.isNotBlank() &&

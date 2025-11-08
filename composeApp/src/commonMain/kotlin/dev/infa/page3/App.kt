@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import dev.infa.page3.navigation.MainNavigation
 import dev.infa.page3.ui.theme.Page3Theme
+import dev.infa.page3.platform.EnsureBackgroundConnection
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
@@ -25,6 +26,7 @@ import page3.composeapp.generated.resources.compose_multiplatform
 @Preview
 fun App() {
     Page3Theme {
+        EnsureBackgroundConnection()
         MainNavigation()
     }
 }
