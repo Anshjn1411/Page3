@@ -7,4 +7,5 @@ plugins {
     alias(libs.plugins.composeCompiler) apply false
     alias(libs.plugins.kotlinMultiplatform) apply false
     alias(libs.plugins.googleGmsGoogleServices) apply false
+    kotlin("native.cocoapods") version "2.0.21"
 }
