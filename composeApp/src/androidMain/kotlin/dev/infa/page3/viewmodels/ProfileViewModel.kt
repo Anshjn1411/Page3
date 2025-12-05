@@ -196,38 +196,6 @@ class ProfileViewModel(
             }
         }
     }
-
-    // ========== Theme Style ==========
-    fun showThemeDialog() {
-        _showThemeDialog.value = true
-    }
-
-    fun dismissThemeDialog() {
-        _showThemeDialog.value = false
-    }
-
-    fun updateThemeStyle(themeStyle: ThemeStyle) {
-        Log.d(TAG, "Updating theme to: ${themeStyle.displayName}")
-        viewModelScope.launch {
-            try {
-                _isLoading.value = true
-
-                // Update local state
-                _userSettings.value = _userSettings.value.copy(themeStyle = themeStyle)
-
-                _successMessage.value = "Theme updated to ${themeStyle.displayName}"
-                _showThemeDialog.value = false
-
-                Log.d(TAG, "Theme updated successfully")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to update theme", e)
-                _errorMessage.value = "Failed to update: ${e.message}"
-            } finally {
-                _isLoading.value = false
-            }
-        }
-    }
-
     // ========== Low Battery Prompt ==========
     fun toggleLowBatteryPrompt(enabled: Boolean) {
         Log.d(TAG, "Toggling low battery prompt: $enabled")

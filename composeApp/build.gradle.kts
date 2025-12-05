@@ -50,24 +50,24 @@ kotlin {
                 api(libs.androidx.lifecycle.viewmodelCompose)
                 api(libs.androidx.lifecycle.runtimeCompose)
                 implementation(libs.compose.material.icons.extended)
-                implementation("io.github.qdsfdhvh:image-loader:1.7.8")
-                implementation("com.russhwolf:multiplatform-settings-no-arg:1.1.1")
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
-                implementation("io.ktor:ktor-client-core:2.3.9")
-                implementation("io.ktor:ktor-client-content-negotiation:2.3.9")
-                implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.9")
-                implementation("io.ktor:ktor-client-logging:2.3.5")
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
-                implementation("cafe.adriel.voyager:voyager-navigator:1.0.0")
-                implementation("cafe.adriel.voyager:voyager-screenmodel:1.0.0")
-                implementation("cafe.adriel.voyager:voyager-koin:1.0.0")
-                implementation("cafe.adriel.voyager:voyager-tab-navigator:1.0.0")
+                implementation("io.github.qdsfdhvh:image-loader:1.10.0")
+                implementation("com.russhwolf:multiplatform-settings-no-arg:1.3.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+                implementation("io.ktor:ktor-client-core:3.3.3")
+                implementation("io.ktor:ktor-client-content-negotiation:3.3.3")
+                implementation("io.ktor:ktor-serialization-kotlinx-json:3.3.3")
+                implementation("io.ktor:ktor-client-logging:3.3.3")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+                implementation("cafe.adriel.voyager:voyager-navigator:1.0.1")
+                implementation("cafe.adriel.voyager:voyager-screenmodel:1.0.1")
+                implementation("cafe.adriel.voyager:voyager-koin:1.0.1")
+                implementation("cafe.adriel.voyager:voyager-tab-navigator:1.0.1")
             }
         }
 
         val commonTest by getting {
             dependencies {
-                implementation("org.jetbrains.kotlin:kotlin-test:2.0.21")
+                implementation("org.jetbrains.kotlin:kotlin-test:2.2.20")
             }
         }
 
@@ -75,17 +75,18 @@ kotlin {
             dependencies {
                 implementation(compose.preview)
                 implementation(libs.androidx.activity.compose)
-                implementation("io.ktor:ktor-client-okhttp:2.3.9")
+                implementation("io.ktor:ktor-client-okhttp:3.3.3")
                 implementation(files("libs/qring_sdk_20250516.aar"))
                 implementation("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
-                implementation("org.greenrobot:eventbus:3.2.0")
-                implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
-                implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
-                implementation("androidx.compose.runtime:runtime-livedata:1.6.1")
-                implementation("androidx.navigation:navigation-compose:2.8.5")
+                implementation("org.greenrobot:eventbus:3.3.1")
+                implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
+                implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
+                implementation("androidx.compose.runtime:runtime-livedata:1.9.5")
+                implementation("androidx.navigation:navigation-compose:2.9.6")
                 implementation("com.google.android.exoplayer:exoplayer:2.19.1")
                 implementation("com.google.android.exoplayer:exoplayer-ui:2.19.1")
-                implementation("app.cash.sqldelight:android-driver:2.0.1")
+                implementation("app.cash.sqldelight:android-driver:2.2.1")
+                implementation("com.github.LottieFiles:dotlottie-android:0.5.0")
             }
         }
 
@@ -100,7 +101,7 @@ kotlin {
             iosSimulatorArm64Main.dependsOn(this)
 
             dependencies {
-                implementation("io.ktor:ktor-client-darwin:2.3.9")
+                implementation("io.ktor:ktor-client-darwin:3.3.3")
             }
         }
     }

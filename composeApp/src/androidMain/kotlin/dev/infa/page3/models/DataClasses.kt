@@ -141,6 +141,30 @@ data class DeviceCapabilities(
             put("supportRingGame", supportRingGame)
         }.toString()
     }
+    fun toList(): List<Pair<String, Boolean>> {
+        return listOf(
+            "Temperature" to supportTemperature,
+            "Plate" to supportPlate,
+            "Menstruation" to supportMenstruation,
+            "Custom Wallpaper" to supportCustomWallpaper,
+            "Blood Oxygen" to supportBloodOxygen,
+            "Blood Pressure" to supportBloodPressure,
+            "Feature" to supportFeature,
+            "One Key Check" to supportOneKeyCheck,
+            "Weather" to supportWeather,
+            "New Sleep Protocol" to newSleepProtocol,
+            "HRV" to supportHrv,
+            "Touch" to supportTouch,
+            "Gesture" to supportGesture,
+            "Ring Music" to supportRingMusic,
+            "Ring Video" to supportRingVideo,
+            "Ring Ebook" to supportRingEbook,
+            "Ring Camera" to supportRingCamera,
+            "Ring Phone Call" to supportRingPhoneCall,
+            "Ring Game" to supportRingGame
+        )
+    }
+
 
     companion object {
         fun fromJson(json: String): DeviceCapabilities? {

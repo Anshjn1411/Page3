@@ -4,16 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Battery5Bar
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.SignalCellularAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -26,35 +18,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import android.util.Log
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Battery3Bar
-import androidx.compose.material.icons.filled.Bedtime
+import android.widget.Toast
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.LinkOff
+import androidx.compose.material.icons.filled.Watch
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import dev.infa.page3.models.SmartWatch
-import dev.infa.page3.ui.components.AppSideBar
-import dev.infa.page3.ui.components.BottomNavBar
-import dev.infa.page3.ui.components.TopBarScreen
+import androidx.compose.ui.platform.LocalContext
+import dev.infa.page3.ui.DailogScreen.ConnectionRequiredAlert
+import dev.infa.page3.ui.DailogScreen.TimeFormatDialog
+import dev.infa.page3.ui.DailogScreen.TouchSettingsDialog
+import dev.infa.page3.ui.DailogScreen.UnitSystemDialog
+import dev.infa.page3.ui.components.CommonTopAppBar
 import dev.infa.page3.ui.navigation.Routes
-import dev.infa.page3.viewmodels.AppType
 import dev.infa.page3.viewmodels.ConnectionViewModel
 import dev.infa.page3.viewmodels.ProfileViewModel
-import dev.infa.page3.viewmodels.ThemeStyle
-import dev.infa.page3.viewmodels.TimeFormat
-import dev.infa.page3.viewmodels.TouchSettings
-import dev.infa.page3.viewmodels.UnitSystem
-import dev.infa.page3.viewmodels.UserSettings
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,14 +59,9 @@ fun ProfileScreen(
     // Dialog States
     val showUnitDialog by profileViewModel.showUnitDialog.collectAsState()
     val showTimeFormatDialog by profileViewModel.showTimeFormatDialog.collectAsState()
-    val showThemeDialog by profileViewModel.showThemeDialog.collectAsState()
     val showTouchDialog by profileViewModel.showTouchDialog.collectAsState()
 
     var showConnectionAlert by remember { mutableStateOf(false) }
-    var currentTab by remember { mutableStateOf("me") }
-
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
 
     // Auto-dismiss alerts
     LaunchedEffect(showConnectionAlert) {
@@ -115,110 +91,131 @@ fun ProfileScreen(
         }
     }
 
-    ModalNavigationDrawer(
-        drawerContent = { AppSideBar(navController) },
-        drawerState = drawerState
+    val context = LocalContext.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
     ) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = "Me",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.Center
-                        )
+
+        CommonTopAppBar("Profile" , { navController.navigateUp()})
+        Spacer(Modifier.height(15.dp))
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+
+            item {
+                DeviceCard(
+                        isConnected , deviceName, deviceAddress, batteryLevel , onBindClick = { navController.navigate(Routes.Scan)
                     },
-                    navigationIcon = {
-                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                            Icon(Icons.Default.Menu, contentDescription = "Menu")
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = { navController.navigate(Routes.Scan) }) {
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .background(Color(0xFF2196F3), CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = "Add Device",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                onDisconnect = { connectionViewModel.disconnect() }
                 )
-            },
-            bottomBar = {
-                BottomNavBar(currentNav = currentTab, navController)
-            },
-            containerColor = Color(0xFFF5F5F5)
-        ) { innerPadding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            ) {
-                ProfileContent(
-                    isConnected = isConnected,
-                    deviceName = deviceName,
-                    deviceAddress = deviceAddress,
-                    batteryLevel = batteryLevel,
-                    userSettings = userSettings,
-                    onBindClick = { navController.navigate(Routes.Scan) },
-                    onDisconnect = { connectionViewModel.disconnect() },
-                    onFindDevice = {
-                        if (isConnected) {
-                            profileViewModel.findMyDevice()
-                        } else {
-                            showConnectionAlert = true
-                        }
-                    },
-                    onUnitClick = { profileViewModel.showUnitDialog() },
-                    onTimeFormatClick = { profileViewModel.showTimeFormatDialog() },
-                    onThemeClick = { profileViewModel.showThemeDialog() },
-                    onTouchSettingsClick = { profileViewModel.showTouchDialog() },
-                    onLowBatteryToggle = { profileViewModel.toggleLowBatteryPrompt(it) }
-                )
-
-                // Connection Alert
-                if (showConnectionAlert) {
-                    ConnectionRequiredAlert()
-                }
-
-                // Success Message
-                successMessage?.let {
-                    SuccessAlert(message = it)
-                }
-
-                // Error Message
-                errorMessage?.let {
-                    ErrorAlert(message = it)
-                }
-
-                // Loading Indicator
-                if (isLoading) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.3f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(color = Color(0xFF2196F3))
-                    }
-                }
             }
+
+            // ✅ DEVICE MANAGEMENT
+            item {
+                SettingsSection(
+                    title = "Device Management",
+                    items = listOf(
+                        SettingItem(
+                            "Device Details",
+                            "Firmware v4.2.1",
+                            onClick = {
+                                if(isConnected){
+                                    navController.navigate(Routes.DeviceDetail)
+                                }else{
+                                    showConnectionAlert = true
+                                }
+
+                            }
+                        ),
+                        SettingItem(
+                            "Find My Device",
+                            "Make device vibrate",
+                            onClick = {
+                                Toast.makeText(context, "Finding Device...", Toast.LENGTH_SHORT).show()
+                                if (isConnected) {
+                                    profileViewModel.findMyDevice()
+                                } else {
+                                    showConnectionAlert = true
+                                }
+                            }
+                        ),
+                        SettingItem(
+                            "Device Capability",
+                            "Features od Device",
+                            onClick = {
+                                if(isConnected){
+                                    navController.navigate(Routes.DeviceCapability)
+                                }else{
+                                    showConnectionAlert = true
+                                }
+                            }
+                        )
+                    )
+                )
+            }
+
+            // ✅ APP SETTINGS
+            item {
+                SettingsSection(
+                    title = "Device Setting",
+                    items = listOf(
+                        SettingItem(
+                            "Set Goal",
+                            "Update your Goal",
+                            onClick = {
+                                navController.navigate(Routes.SetGoal)
+                            }
+                        ),
+                        SettingItem(
+                            "Unit Format",
+                            "Measurement units",
+                            onClick = {
+                                if(isConnected){
+                                    profileViewModel.showUnitDialog()
+                                }else{
+                                    showConnectionAlert = true
+                                }
+
+                            }
+                        ),
+                        SettingItem(
+                            "Touch gestures",
+                            "Enable the touch on device",
+                            onClick = {
+                                if(isConnected){
+                                    profileViewModel.showTouchDialog()
+                                }else{
+                                    showConnectionAlert = true
+                                }
+
+                            }
+                        ),
+                        SettingItem(
+                            "Time Format",
+                            "24hr-12hr",
+                            onClick = {
+                                if(isConnected){
+                                    profileViewModel.showTimeFormatDialog()
+                                }else{
+                                    showConnectionAlert = true
+                                }
+
+                            }
+                        )
+                    )
+                )
+            }
+            item { AppInfoFooter() }
         }
     }
 
-    // Dialogs
     if (showUnitDialog) {
         UnitSystemDialog(
             currentUnit = userSettings.unitSystem,
@@ -235,14 +232,6 @@ fun ProfileScreen(
         )
     }
 
-    if (showThemeDialog) {
-        ThemeDialog(
-            currentTheme = userSettings.themeStyle,
-            onDismiss = { profileViewModel.dismissThemeDialog() },
-            onSelect = { profileViewModel.updateThemeStyle(it) }
-        )
-    }
-
     if (showTouchDialog) {
         TouchSettingsDialog(
             touchSettings = profileViewModel.touchSettings.collectAsState().value,
@@ -252,697 +241,195 @@ fun ProfileScreen(
             }
         )
     }
+    if(showConnectionAlert){
+        ConnectionRequiredAlert()
+    }
 }
 
 @Composable
-private fun ProfileContent(
+fun DeviceCard(
     isConnected: Boolean,
     deviceName: String,
     deviceAddress: String,
     batteryLevel: Int,
-    userSettings: UserSettings,
     onBindClick: () -> Unit,
     onDisconnect: () -> Unit,
-    onFindDevice: () -> Unit,
-    onUnitClick: () -> Unit,
-    onTimeFormatClick: () -> Unit,
-    onThemeClick: () -> Unit,
-    onTouchSettingsClick: () -> Unit,
-    onLowBatteryToggle: (Boolean) -> Unit
 ) {
     Column(
         modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .background(Color(0xFFF5F5F5))
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Device Status Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-        ) {
-            if (isConnected) {
-                ConnectedDeviceSection(
-                    deviceName = deviceName,
-                    deviceAddress = deviceAddress,
-                    batteryLevel = batteryLevel,
-                    onDisconnect = onDisconnect
-                )
-            } else {
-                NotBoundSection(onBindClick = onBindClick)
-            }
-        }
-
-        // Feature Cards
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            FeatureCard(
-                modifier = Modifier.weight(1f),
-                icon = "❤️",
-                title = "Health\nMonitoring",
-                backgroundColor = Color(0xFFFFA726)
-            )
-            FeatureCard(
-                modifier = Modifier.weight(1f),
-                icon = "📷",
-                title = "Take Pictures",
-                backgroundColor = Color(0xFFFF7043)
-            )
-        }
-
-        // Settings List
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-        ) {
-            Column {
-                SettingsItem(
-                    icon = "🔍",
-                    title = "Find My Device",
-                    iconColor = Color(0xFF00BCD4),
-                    onClick = onFindDevice
-                )
-                Divider(color = Color(0xFFF0F0F0))
-
-                SettingsItem(
-                    icon = "👋",
-                    title = "Touch & Gestures",
-                    iconColor = Color(0xFF9C27B0),
-                    onClick = onTouchSettingsClick
-                )
-                Divider(color = Color(0xFFF0F0F0))
-
-
-                SettingsItem(
-                    icon = "📏",
-                    title = "Units Format",
-                    value = userSettings.unitSystem.displayName,
-                    iconColor = Color(0xFF4CAF50),
-                    onClick = onUnitClick
-                )
-                Divider(color = Color(0xFFF0F0F0))
-
-                SettingsItem(
-                    icon = "🕐",
-                    title = "Time Format",
-                    value = userSettings.timeFormat.displayName,
-                    iconColor = Color(0xFFFFC107),
-                    onClick = onTimeFormatClick
-                )
-                Divider(color = Color(0xFFF0F0F0))
-
-                SettingsItemWithToggle(
-                    icon = "🔋",
-                    title = "Low Battery Prompt",
-                    checked = userSettings.lowBatteryPrompt,
-                    iconColor = Color(0xFFFFA726),
-                    onToggle = onLowBatteryToggle
-                )
-            }
-        }
-    }
-}
-
-// ========== DIALOGS ==========
-
-@Composable
-fun UnitSystemDialog(
-    currentUnit: UnitSystem,
-    onDismiss: () -> Unit,
-    onSelect: (UnitSystem) -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                "Select Unit System",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                UnitSystem.values().forEach { unit ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { onSelect(unit) }
-                            .background(
-                                if (unit == currentUnit) Color(0xFFE3F2FD)
-                                else Color.Transparent
-                            )
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = unit == currentUnit,
-                            onClick = { onSelect(unit) },
-                            colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF2196F3))
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = unit.displayName,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
-@Composable
-fun TimeFormatDialog(
-    currentFormat: TimeFormat,
-    onDismiss: () -> Unit,
-    onSelect: (TimeFormat) -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                "Select Time Format",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                TimeFormat.values().forEach { format ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { onSelect(format) }
-                            .background(
-                                if (format == currentFormat) Color(0xFFE3F2FD)
-                                else Color.Transparent
-                            )
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = format == currentFormat,
-                            onClick = { onSelect(format) },
-                            colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF2196F3))
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = format.displayName,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
-@Composable
-fun ThemeDialog(
-    currentTheme: ThemeStyle,
-    onDismiss: () -> Unit,
-    onSelect: (ThemeStyle) -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                "Select Theme",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ThemeStyle.values().forEach { theme ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { onSelect(theme) }
-                            .background(
-                                if (theme == currentTheme) Color(0xFFE3F2FD)
-                                else Color.Transparent
-                            )
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = theme == currentTheme,
-                            onClick = { onSelect(theme) },
-                            colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF2196F3))
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = theme.displayName,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
-@Composable
-fun TouchSettingsDialog(
-    touchSettings: TouchSettings,
-    onDismiss: () -> Unit,
-    onSave: (Int, Boolean, Int) -> Unit
-) {
-    var selectedAppType by remember { mutableStateOf(touchSettings.appType) }
-    var isTouch by remember { mutableStateOf(touchSettings.isTouch) }
-    var strength by remember { mutableStateOf(touchSettings.strength.toFloat()) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                "Touch & Gestures Settings",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-        },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // App Type Selection
-                Text(
-                    "App Type",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    AppType.values().forEach { app ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { selectedAppType = app.code }
-                                .background(
-                                    if (selectedAppType == app.code) Color(0xFFE3F2FD)
-                                    else Color.Transparent
-                                )
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = selectedAppType == app.code,
-                                onClick = { selectedAppType = app.code },
-                                colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF2196F3))
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(app.displayName, style = MaterialTheme.typography.bodyMedium)
-                        }
-                    }
-                }
-
-                Divider()
-
-                // Touch vs Gestures
-                Text(
-                    "Control Type",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Touch Mode")
-                    Switch(
-                        checked = isTouch,
-                        onCheckedChange = { isTouch = it },
-                        colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFF2196F3))
-                    )
-                }
-
-                Divider()
-
-                // Strength Slider
-                Text(
-                    "Vibration Strength: ${strength.toInt()}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Slider(
-                    value = strength,
-                    onValueChange = { strength = it },
-                    valueRange = 1f..10f,
-                    steps = 8,
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color(0xFF2196F3),
-                        activeTrackColor = Color(0xFF2196F3)
-                    )
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onSave(selectedAppType, isTouch, strength.toInt()) },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))
-            ) {
-                Text("Save")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
-// ========== HELPER COMPOSABLES ==========
-
-@Composable
-fun SettingsItem(
-    icon: String,
-    title: String,
-    value: String? = null,
-    iconColor: Color,
-    onClick: (() -> Unit)? = null
-) {
-    Row(
-        modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = onClick != null) { onClick?.invoke() }
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .background(iconColor.copy(alpha = 0.1f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(icon, fontSize = 20.sp)
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                title,
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = 2
-            )
-        }
-
-        if (value != null) {
-            Text(
-                value,
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.Gray
-            )
-        }
-
-        if (onClick != null) {
-            Icon(
-                Icons.Default.ChevronRight,
-                contentDescription = null,
-                tint = Color.Gray
-            )
-        }
-    }
-}
-
-@Composable
-fun SettingsItemWithToggle(
-    icon: String,
-    title: String,
-    checked: Boolean,
-    iconColor: Color,
-    onToggle: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            .clip(RoundedCornerShape(24.dp))
+            .background(Color(0xFF0F1F1A))
+            .padding(20.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+
             Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .background(iconColor.copy(alpha = 0.1f), CircleShape),
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0x2200FF88)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(icon, fontSize = 20.sp)
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-        }
-        Switch(
-            checked = checked,
-            onCheckedChange = onToggle,
-            colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFF2196F3))
-        )
-    }
-}
-
-@Composable
-fun SuccessAlert(message: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        contentAlignment = Alignment.TopCenter
-    ) {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF4CAF50)),
-            elevation = CardDefaults.cardElevation(8.dp)
-        ) {
-            Text(
-                text = message,
-                color = Color.White,
-                modifier = Modifier.padding(16.dp),
-                style = MaterialTheme.typography.bodyLarge
-            )
-        }
-    }
-}
-
-@Composable
-fun ErrorAlert(message: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        contentAlignment = Alignment.TopCenter
-    ) {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFF44336)),
-            elevation = CardDefaults.cardElevation(8.dp)
-        ) {
-            Text(
-                text = message,
-                color = Color.White,
-                modifier = Modifier.padding(16.dp),
-                style = MaterialTheme.typography.bodyLarge
-            )
-        }
-    }
-}
-
-
-
-@Composable
-private fun ConnectedDeviceSection(
-    deviceName: String,
-    deviceAddress: String,
-    batteryLevel: Int,
-    onDisconnect: () -> Unit
-) {
-    Column(
-        modifier = Modifier.padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .background(Color(0xFF2196F3), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("⌚", fontSize = 24.sp)
-                }
-                Column {
-                    Text(
-                        text = deviceName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1A1A1A)
-                    )
-                    Text(
-                        text = deviceAddress,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF666666)
-                    )
-                }
-            }
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .background(Color(0xFF4CAF50), CircleShape)
-                )
-                Text(
-                    text = "Connected",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF4CAF50),
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
-
-        Divider(color = Color(0xFFE0E0E0))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
                 Icon(
-                    imageVector = Icons.Default.Battery3Bar,
+                    imageVector = Icons.Default.Watch,
                     contentDescription = null,
-                    tint = Color(0xFF4CAF50),
-                    modifier = Modifier.size(20.dp)
-                )
-                Text(
-                    text = "Battery: $batteryLevel%",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF333333)
+                    tint = Color(0xFF00FF88),
+                    modifier = Modifier.size(26.dp)
                 )
             }
-            TextButton(onClick = onDisconnect) {
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+
+                if (isConnected) {
+                    Text(deviceName, color = Color.White, fontSize = 16.sp)
+                    Text(deviceAddress, color = Color.Gray, fontSize = 12.sp)
+                } else {
+                    Text("No Device Connected", color = Color.White, fontSize = 16.sp)
+                    Text("Tap below to bind your device", color = Color.Gray, fontSize = 12.sp)
+                }
+            }
+
+            if (isConnected) {
                 Text(
-                    text = "Disconnect",
-                    color = Color(0xFFFF3B30),
-                    fontWeight = FontWeight.Medium
+                    "$batteryLevel%",
+                    color = Color(0xFF00FF88),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        if (isConnected) {
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+
+                MiniInfoCard("Status", "Connected")
+                MiniInfoCard("Battery", "$batteryLevel%")
+
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0x22FF4444))
+                    .clickable { onDisconnect() }
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Disconnect Device", color = Color.Red, fontSize = 14.sp)
+            }
+
+        } else {
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0x2200FF88))
+                    .clickable { onBindClick() }
+                    .padding(vertical = 14.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "Bind Device",
+                    color = Color(0xFF00FF88),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
         }
     }
 }
 
+
 @Composable
-private fun NotBoundSection(onBindClick: () -> Unit) {
+fun MiniInfoCard(title: String, subtitle: String) {
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xFF1A1A1A))
+            .padding(12.dp)
+    ) {
+        Text(title, color = Color.White, fontSize = 13.sp)
+        Text(subtitle, color = Color.Gray, fontSize = 10.sp)
+    }
+}
+
+
+
+@Composable
+fun AppInfoFooter() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = "You have not bound the device yet",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF1A1A1A)
-        )
-        Button(
-            onClick = onBindClick,
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF64B5F6)),
-            shape = RoundedCornerShape(24.dp),
-            modifier = Modifier.padding(horizontal = 16.dp)
-        ) {
-            Text(
-                text = "Bind immediately",
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                fontWeight = FontWeight.Medium
-            )
-        }
+        Text("Page3 Fitness Tracker", color = Color.Gray, fontSize = 12.sp)
+        Text("Version 2", color = Color.DarkGray, fontSize = 11.sp)
+        Text("© 2025 Page3 Mumbai .", color = Color(0xFF444444), fontSize = 11.sp)
     }
 }
 
 @Composable
-private fun FeatureCard(
-    modifier: Modifier = Modifier,
-    icon: String,
+fun SettingsSection(
     title: String,
-    backgroundColor: Color
+    items: List<SettingItem>
 ) {
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(Color(0xFF121212))
+            .padding(20.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .background(backgroundColor, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(icon, fontSize = 24.sp)
-            }
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.Medium,
-                textAlign = TextAlign.Center,
-                color = Color(0xFF1A1A1A)
+
+        Text(title, color = Color.White, fontSize = 16.sp)
+        Spacer(modifier = Modifier.height(12.dp))
+
+        items.forEach {
+            SettingsRow(
+                title = it.title,
+                subtitle = it.subTitle,
+                onClick = it.onClick
             )
         }
     }
 }
+@Composable
+fun SettingsRow(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xFF1A1A1A))
+            .clickable { onClick() }
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, color = Color.White, fontSize = 14.sp)
+            Text(subtitle, color = Color.Gray, fontSize = 11.sp)
+        }
+        Icon(Icons.Default.ChevronRight, null, tint = Color.Gray)
+    }
 
-
+    Spacer(modifier = Modifier.height(8.dp))
+}
+data class SettingItem(
+    val title: String,
+    val subTitle: String,
+    val onClick: () -> Unit
+)

@@ -71,37 +71,9 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     connectionViewModel: ConnectionViewModel,
     homeViewModel: HomeViewModel,
+    stepViewModel: StepViewmodel,
     navController: NavController
 ) {
-    val uiState by connectionViewModel.uiState.collectAsState()
-    val isConnected = uiState.isConnected
-    val deviceName = uiState.connectedDevice?.deviceName ?: ""
-    val todayDate = remember {
-        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-    }
-    val homeStepData by homeViewModel.todayStep.collectAsState()
-    val homeSleepData by homeViewModel.todaySleep.collectAsState()
-    val isLoadingData by homeViewModel.isLoading.collectAsState()
-    val batteryLevel by homeViewModel.batteryValue.collectAsState()
-    val deviceCapabilities by homeViewModel.deviceCapabilities.collectAsState()
-    val displayStepData = homeStepData
-    var hasSyncedOnConnect by remember { mutableStateOf(false) }
-
-    LaunchedEffect(isConnected) {
-        if (isConnected && !hasSyncedOnConnect) {
-            hasSyncedOnConnect = true
-            homeViewModel.fetchDeviceCapabilities()
-            homeViewModel.getBatteryLevel()
-            homeViewModel.refreshAll()
-            // Wait 5 seconds after connection, then initialize the test harness
-            kotlinx.coroutines.delay(5000)
-            try {
-                dev.infa.page3.testing.SleepSyncTest().testYesterday()
-            } catch (_: Exception) {}
-        } else if (!isConnected) {
-            hasSyncedOnConnect = false
-        }
-    }
 
     var currentTab by remember { mutableStateOf("home") }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -112,293 +84,289 @@ fun HomeScreen(
         drawerState = drawerState
     ) {
         Scaffold(
-            topBar = {
-                SDKTopBarScreen(
-                    onClickMenu = { scope.launch { drawerState.open() } },
-                    isConnected = isConnected,
-                    isLoadingSteps = isLoadingData,
-                    onClickSync = {
-                        if (!isLoadingData && isConnected) {
-                            homeViewModel.refreshAll()
-                        }
-                    },
-                    onOpenConnect = { navController.navigate(Routes.Profile) }
-                )
-            },
             bottomBar = {
                 BottomNavBar(currentNav = currentTab, navController)
             }
         ) { innerPadding ->
+            DashboardScreen(
+                Modifier.padding(innerPadding),
+                connectionViewModel
+                ,homeViewModel,
+                stepViewModel = stepViewModel,
+                navController
 
-            val activityCardData = if (displayStepData != null) {
-                val activityPercentage = ((displayStepData.totalSteps.toFloat() / 5000f) * 100)
-                    .toInt().coerceIn(0, 100)
-
-                HealthCardData(
-                    title = "Activity",
-                    date = todayDate,
-                    backgroundImageRes = R.drawable.activity_image,
-                    progressPercentage = activityPercentage,
-                    progressIcon = Icons.Default.Star,
-                    statusText = when {
-                        activityPercentage >= 80 -> "Great job!"
-                        activityPercentage >= 50 -> "Keep going!"
-                        activityPercentage >= 20 -> "Getting started"
-                        else -> "Lack of exercise"
-                    },
-                    metrics = listOf(
-                        HealthMetric(
-                            Icons.Default.LocalFireDepartment,
-                            (displayStepData.calories/1000).toString(),
-                            "Kcal"
-                        ),
-                        HealthMetric(
-                            Icons.Default.DirectionsWalk,
-                            displayStepData.totalSteps.toString(),
-                            "Steps"
-                        ),
-                        HealthMetric(
-                            Icons.Default.LocationOn,
-                            String.format("%.2f", displayStepData.distance / 1000f),
-                            "Km"
-                        )
-                    )
-                )
-            } else {
-                HealthCardData(
-                    title = "Activity",
-                    date = todayDate,
-                    backgroundImageRes = R.drawable.activity_image,
-                    progressPercentage = 0,
-                    progressIcon = Icons.Default.Star,
-                    statusText = when {
-                        isLoadingData -> "Syncing..."
-                        !isConnected -> "Device not connected"
-                        else -> "No data yet"
-                    },
-                    metrics = listOf(
-                        HealthMetric(Icons.Default.LocalFireDepartment, "--", "Kcal"),
-                        HealthMetric(Icons.Default.DirectionsWalk, "--", "Steps"),
-                        HealthMetric(Icons.Default.LocationOn, "--", "Km")
-                    )
-                )
-            }
-
-            val sleepCardData = if (homeSleepData != null) {
-                HealthCardData(
-                    title = "Sleep",
-                    date = homeSleepData!!.date,
-                    backgroundImageRes = R.drawable.activity_image,
-                    progressPercentage = homeSleepData!!.sleepScore,
-                    progressIcon = Icons.Default.Star,
-                    statusText = when {
-                        homeSleepData!!.sleepScore >= 90 -> "Excellent sleep!"
-                        homeSleepData!!.sleepScore >= 75 -> "Good sleep"
-                        homeSleepData!!.sleepScore >= 60 -> "Fair sleep"
-                        else -> "Poor sleep"
-                    },
-                    metrics = listOf(
-                        HealthMetric(
-                            Icons.Default.Bedtime,
-                            "${homeSleepData!!.totalDuration / 60}h ${homeSleepData!!.totalDuration % 60}m",
-                            "Duration"
-                        ),
-                        HealthMetric(
-                            Icons.Default.TrendingUp,
-                            "${homeSleepData!!.sleepEfficiency}%",
-                            "Efficiency"
-                        ),
-                        HealthMetric(
-                            Icons.Default.Nightlight,
-                            "${homeSleepData!!.deepSleep}m",
-                            "Deep"
-                        )
-                    )
-                )
-            } else {
-                HealthCardData(
-                    title = "Sleep",
-                    date = todayDate,
-                    backgroundImageRes = R.drawable.activity_image,
-                    progressPercentage = 0,
-                    progressIcon = Icons.Default.Star,
-                    statusText = "Hardcoded data",
-                    metrics = listOf(
-                        HealthMetric(Icons.Default.Bedtime, "--", "Duration"),
-                        HealthMetric(Icons.Default.TrendingUp, "--", "Efficiency"),
-                        HealthMetric(Icons.Default.Nightlight, "--", "Deep")
-                    )
-                )
-            }
-
-            val heartRateCard = SimpleCardData(
-                title = "Heart Rate",
-                icon = Icons.Default.Favorite,
-                message = if (isConnected) {
-                    "Tap to view your heart rate data"
-                } else {
-                    "Connect your device to track heart rate"
-                },
-                backgroundColor = Color(0xFF5B8FA3)
             )
 
-            val hrvCard = SimpleCardData(
-                title = "HRV",
-                icon = Icons.Default.Favorite,
-                message = if (isConnected) {
-                    "Tap to view heart rate variability"
-                } else {
-                    "Connect your device to track HRV"
-                },
-                backgroundColor = Color(0xFF6B8FA3)
-            )
-
-            val bloodOxygenCard = SimpleCardData(
-                title = "Blood Oxygen",
-                icon = Icons.Default.WaterDrop,
-                message = if (isConnected) {
-                    "Tap to view blood oxygen levels"
-                } else {
-                    "Connect your device to track blood oxygen"
-                },
-                backgroundColor = Color(0xFF7B99C8)
-            )
-
-            val stressCard = SimpleCardData(
-                title = "Stress",
-                icon = Icons.Default.Spa,
-                message = if (isConnected) {
-                    "Tap to view stress analysis"
-                } else {
-                    "Connect your device to track stress"
-                },
-                backgroundColor = Color(0xFF5B9BA3)
-            )
-
-            val exerciseCard = SimpleCardData(
-                title = "Exercise",
-                icon = Icons.Default.DirectionsRun,
-                message = if (isConnected) {
-                    "Tap to start a workout"
-                } else {
-                    "Connect your device to exercise"
-                },
-                backgroundColor = Color(0xFF4D96FF)
-            )
-
-            LazyColumn(
-                modifier = modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(horizontal = 5.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-
-                item {
-                    if (isConnected) {
-                        ConnectedDeviceInfoCard(
-                            deviceName = deviceName,
-                            batteryLevel = batteryLevel,
-                            connectionStatus = "Connected",
-                            onManageClick = { navController.navigate(Routes.Profile) }
-                        )
-                    } else {
-                        BindCard(onBindClick = { navController.navigate(Routes.Profile) })
-                    }
-                }
-
-                item {
-                    Box(
-                        modifier = Modifier.clickable {
-                            if (isConnected) navController.navigate(Routes.Step)
-                        }
-                    ) {
-                        HealthCard(data = activityCardData)
-                    }
-                }
-
-                item {
-                    Box(
-                        modifier = Modifier.clickable {
-                            if (isConnected) navController.navigate(Routes.Sleep)
-                        }
-                    ) {
-                        HealthCard(data = sleepCardData)
-                    }
-                }
-
-
-                item {
-                    SimpleInfoCard(
-                        data = heartRateCard,
-                        onCLick = {
-                            if (isConnected) {
-                                navController.navigate(Routes.Heart)
-                            } else {
-                                navController.navigate(Routes.Profile)
-                            }
-                        }
-                    )
-                }
-
-                if (deviceCapabilities?.supportHrv == true || !isConnected) {
-                    item {
-                        SimpleInfoCard(
-                            data = hrvCard,
-                            onCLick = {
-                                if (isConnected) {
-                                    navController.navigate(Routes.HRV)
-                                } else {
-                                    navController.navigate(Routes.Profile)
-                                }
-                            }
-                        )
-                    }
-                }
-
-
-                if (deviceCapabilities?.supportBloodOxygen == true || !isConnected) {
-                    item {
-                        SimpleInfoCard(
-                            data = bloodOxygenCard,
-                            onCLick = {
-                                if (isConnected) {
-                                    navController.navigate(Routes.BloodOxygen)
-                                } else {
-                                    navController.navigate(Routes.Profile)
-                                }
-                            }
-                        )
-                    }
-                }
-
-
-                item {
-                    SimpleInfoCard(
-                        data = stressCard,
-                        onCLick = {
-                            if (isConnected) {
-                                navController.navigate(Routes.Stress)
-                            } else {
-                                navController.navigate(Routes.Profile)
-                            }
-                        }
-                    )
-                }
-
-                item {
-                    SimpleInfoCard(
-                        data = exerciseCard,
-                        onCLick = {
-                            if (isConnected) {
-                                navController.navigate(Routes.Exercise)
-                            } else {
-                                navController.navigate(Routes.Profile)
-                            }
-                        }
-                    )
-                }
-            }
+//            val activityCardData = if (displayStepData != null) {
+//                val activityPercentage = ((displayStepData.totalSteps.toFloat() / 5000f) * 100)
+//                    .toInt().coerceIn(0, 100)
+//
+//                HealthCardData(
+//                    title = "Activity",
+//                    date = todayDate,
+//                    backgroundImageRes = R.drawable.activity_image,
+//                    progressPercentage = activityPercentage,
+//                    progressIcon = Icons.Default.Star,
+//                    statusText = when {
+//                        activityPercentage >= 80 -> "Great job!"
+//                        activityPercentage >= 50 -> "Keep going!"
+//                        activityPercentage >= 20 -> "Getting started"
+//                        else -> "Lack of exercise"
+//                    },
+//                    metrics = listOf(
+//                        HealthMetric(
+//                            Icons.Default.LocalFireDepartment,
+//                            (displayStepData.calories/1000).toString(),
+//                            "Kcal"
+//                        ),
+//                        HealthMetric(
+//                            Icons.Default.DirectionsWalk,
+//                            displayStepData.totalSteps.toString(),
+//                            "Steps"
+//                        ),
+//                        HealthMetric(
+//                            Icons.Default.LocationOn,
+//                            String.format("%.2f", displayStepData.distance / 1000f),
+//                            "Km"
+//                        )
+//                    )
+//                )
+//            } else {
+//                HealthCardData(
+//                    title = "Activity",
+//                    date = todayDate,
+//                    backgroundImageRes = R.drawable.activity_image,
+//                    progressPercentage = 0,
+//                    progressIcon = Icons.Default.Star,
+//                    statusText = when {
+//                        isLoadingData -> "Syncing..."
+//                        !isConnected -> "Device not connected"
+//                        else -> "No data yet"
+//                    },
+//                    metrics = listOf(
+//                        HealthMetric(Icons.Default.LocalFireDepartment, "--", "Kcal"),
+//                        HealthMetric(Icons.Default.DirectionsWalk, "--", "Steps"),
+//                        HealthMetric(Icons.Default.LocationOn, "--", "Km")
+//                    )
+//                )
+//            }
+//
+//            val sleepCardData = if (homeSleepData != null) {
+//                HealthCardData(
+//                    title = "Sleep",
+//                    date = homeSleepData!!.date,
+//                    backgroundImageRes = R.drawable.activity_image,
+//                    progressPercentage = homeSleepData!!.sleepScore,
+//                    progressIcon = Icons.Default.Star,
+//                    statusText = when {
+//                        homeSleepData!!.sleepScore >= 90 -> "Excellent sleep!"
+//                        homeSleepData!!.sleepScore >= 75 -> "Good sleep"
+//                        homeSleepData!!.sleepScore >= 60 -> "Fair sleep"
+//                        else -> "Poor sleep"
+//                    },
+//                    metrics = listOf(
+//                        HealthMetric(
+//                            Icons.Default.Bedtime,
+//                            "${homeSleepData!!.totalDuration / 60}h ${homeSleepData!!.totalDuration % 60}m",
+//                            "Duration"
+//                        ),
+//                        HealthMetric(
+//                            Icons.Default.TrendingUp,
+//                            "${homeSleepData!!.sleepEfficiency}%",
+//                            "Efficiency"
+//                        ),
+//                        HealthMetric(
+//                            Icons.Default.Nightlight,
+//                            "${homeSleepData!!.deepSleep}m",
+//                            "Deep"
+//                        )
+//                    )
+//                )
+//            } else {
+//                HealthCardData(
+//                    title = "Sleep",
+//                    date = todayDate,
+//                    backgroundImageRes = R.drawable.activity_image,
+//                    progressPercentage = 0,
+//                    progressIcon = Icons.Default.Star,
+//                    statusText = "Hardcoded data",
+//                    metrics = listOf(
+//                        HealthMetric(Icons.Default.Bedtime, "--", "Duration"),
+//                        HealthMetric(Icons.Default.TrendingUp, "--", "Efficiency"),
+//                        HealthMetric(Icons.Default.Nightlight, "--", "Deep")
+//                    )
+//                )
+//            }
+//
+//            val heartRateCard = SimpleCardData(
+//                title = "Heart Rate",
+//                icon = Icons.Default.Favorite,
+//                message = if (isConnected) {
+//                    "Tap to view your heart rate data"
+//                } else {
+//                    "Connect your device to track heart rate"
+//                },
+//                backgroundColor = Color(0xFF5B8FA3)
+//            )
+//
+//            val hrvCard = SimpleCardData(
+//                title = "HRV",
+//                icon = Icons.Default.Favorite,
+//                message = if (isConnected) {
+//                    "Tap to view heart rate variability"
+//                } else {
+//                    "Connect your device to track HRV"
+//                },
+//                backgroundColor = Color(0xFF6B8FA3)
+//            )
+//
+//            val bloodOxygenCard = SimpleCardData(
+//                title = "Blood Oxygen",
+//                icon = Icons.Default.WaterDrop,
+//                message = if (isConnected) {
+//                    "Tap to view blood oxygen levels"
+//                } else {
+//                    "Connect your device to track blood oxygen"
+//                },
+//                backgroundColor = Color(0xFF7B99C8)
+//            )
+//
+//            val stressCard = SimpleCardData(
+//                title = "Stress",
+//                icon = Icons.Default.Spa,
+//                message = if (isConnected) {
+//                    "Tap to view stress analysis"
+//                } else {
+//                    "Connect your device to track stress"
+//                },
+//                backgroundColor = Color(0xFF5B9BA3)
+//            )
+//
+//            val exerciseCard = SimpleCardData(
+//                title = "Exercise",
+//                icon = Icons.Default.DirectionsRun,
+//                message = if (isConnected) {
+//                    "Tap to start a workout"
+//                } else {
+//                    "Connect your device to exercise"
+//                },
+//                backgroundColor = Color(0xFF4D96FF)
+//            )
+//
+//            LazyColumn(
+//                modifier = modifier
+//                    .fillMaxSize()
+//                    .padding(innerPadding)
+//                    .padding(horizontal = 5.dp),
+//                verticalArrangement = Arrangement.spacedBy(10.dp)
+//            ) {
+//
+//                item {
+//                    if (isConnected) {
+//                        ConnectedDeviceInfoCard(
+//                            deviceName = deviceName,
+//                            batteryLevel = batteryLevel,
+//                            connectionStatus = "Connected",
+//                            onManageClick = { navController.navigate(Routes.Profile) }
+//                        )
+//                    } else {
+//                        BindCard(onBindClick = { navController.navigate(Routes.Profile) })
+//                    }
+//                }
+//
+//                item {
+//                    Box(
+//                        modifier = Modifier.clickable {
+//                            if (isConnected) navController.navigate(Routes.Step)
+//                        }
+//                    ) {
+//                        HealthCard(data = activityCardData)
+//                    }
+//                }
+//
+//                item {
+//                    Box(
+//                        modifier = Modifier.clickable {
+//                            if (isConnected) navController.navigate(Routes.Sleep)
+//                        }
+//                    ) {
+//                        HealthCard(data = sleepCardData)
+//                    }
+//                }
+//
+//
+//                item {
+//                    SimpleInfoCard(
+//                        data = heartRateCard,
+//                        onCLick = {
+//                            if (isConnected) {
+//                                navController.navigate(Routes.Heart)
+//                            } else {
+//                                navController.navigate(Routes.Profile)
+//                            }
+//                        }
+//                    )
+//                }
+//
+//                if (deviceCapabilities?.supportHrv == true || !isConnected) {
+//                    item {
+//                        SimpleInfoCard(
+//                            data = hrvCard,
+//                            onCLick = {
+//                                if (isConnected) {
+//                                    navController.navigate(Routes.HRV)
+//                                } else {
+//                                    navController.navigate(Routes.Profile)
+//                                }
+//                            }
+//                        )
+//                    }
+//                }
+//
+//
+//                if (deviceCapabilities?.supportBloodOxygen == true || !isConnected) {
+//                    item {
+//                        SimpleInfoCard(
+//                            data = bloodOxygenCard,
+//                            onCLick = {
+//                                if (isConnected) {
+//                                    navController.navigate(Routes.BloodOxygen)
+//                                } else {
+//                                    navController.navigate(Routes.Profile)
+//                                }
+//                            }
+//                        )
+//                    }
+//                }
+//
+//
+//                item {
+//                    SimpleInfoCard(
+//                        data = stressCard,
+//                        onCLick = {
+//                            if (isConnected) {
+//                                navController.navigate(Routes.Stress)
+//                            } else {
+//                                navController.navigate(Routes.Profile)
+//                            }
+//                        }
+//                    )
+//                }
+//
+//                item {
+//                    SimpleInfoCard(
+//                        data = exerciseCard,
+//                        onCLick = {
+//                            if (isConnected) {
+//                                navController.navigate(Routes.Exercise)
+//                            } else {
+//                                navController.navigate(Routes.Profile)
+//                            }
+//                        }
+//                    )
+//                }
+//            }
+//        }
         }
     }
 }

@@ -51,6 +51,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import dev.infa.page3.ui.components.AppSideBar
 import dev.infa.page3.ui.components.BottomNavBar
+import dev.infa.page3.ui.components.CommonTopAppBar
 import dev.infa.page3.ui.components.SDKTopBarScreen
 import dev.infa.page3.ui.components.TopBarScreen
 import dev.infa.page3.ui.navigation.Routes
@@ -65,14 +66,69 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
+@Composable
+fun DarkGoalInputCard(
+    title: String,
+    value: String,
+    unit: String,
+    onValueChange: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color(0xFF111111))
+            .border(
+                1.dp,
+                Color(0xFF00FF88).copy(alpha = 0.3f),
+                RoundedCornerShape(18.dp)
+            )
+            .padding(16.dp)
+    ) {
+
+        Text(text = title, color = Color.White, fontSize = 14.sp)
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth(),
+            suffix = { Text(unit, color = Color.Gray) },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color(0xFF00FF88),
+                unfocusedBorderColor = Color.DarkGray,
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                cursorColor = Color(0xFF00FF88)
+            ),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+        )
+    }
+}
+@Composable
+fun DarkPresetButton(text: String, onClick: () -> Unit) {
+    OutlinedButton(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, Color(0xFF00FF88)),
+        colors = ButtonDefaults.outlinedButtonColors(
+            contentColor = Color(0xFF00FF88)
+        ),
+        modifier = Modifier.height(48.dp)
+    ) {
+        Text(text, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GoalsSettingsScreen(
     homeViewModel: HomeViewModel,
-    navController: NavController,
-    modifier: Modifier = Modifier
+    navController: NavController
 ) {
-    // Collect states
+    // ✅ ViewModel State (READ ONLY)
     val stepGoal by homeViewModel.stepGoal.collectAsState()
     val calorieGoal by homeViewModel.calorieGoal.collectAsState()
     val distanceGoal by homeViewModel.distanceGoal.collectAsState()
@@ -80,178 +136,101 @@ fun GoalsSettingsScreen(
     val goalSetSuccess by homeViewModel.goalSetSuccess.collectAsState()
     val errorMessage by homeViewModel.errorMessage.collectAsState()
 
-    // Local editable states
+    // ✅ Local Editable State (ONLY UI edits)
     var editableStepGoal by remember { mutableStateOf(stepGoal.toString()) }
     var editableCalorieGoal by remember { mutableStateOf(calorieGoal.toString()) }
-    var editableDistanceGoal by remember { mutableStateOf((distanceGoal / 1000f).toString()) } // Convert to km
+    var editableDistanceGoal by remember { mutableStateOf((distanceGoal / 1000f).toString()) }
 
-    // Update local states when ViewModel states change
+    // ✅ Sync UI when ViewModel changes
     LaunchedEffect(stepGoal, calorieGoal, distanceGoal) {
         editableStepGoal = stepGoal.toString()
         editableCalorieGoal = calorieGoal.toString()
         editableDistanceGoal = (distanceGoal / 1000f).toString()
     }
 
-    // Show success/error messages
+    // ✅ Success / Error Reset
     LaunchedEffect(goalSetSuccess) {
-        when (goalSetSuccess) {
-            true -> {
-                Log.d("GoalsSettings", "✅ Goals updated successfully!")
-                homeViewModel.clearGoalSetStatus()
-            }
-            false -> {
-                Log.e("GoalsSettings", "❌ Failed to update goals")
-                homeViewModel.clearGoalSetStatus()
-            }
-            null -> {}
+        goalSetSuccess?.let {
+            homeViewModel.clearGoalSetStatus()
         }
     }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "Daily Goals",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back"
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+            CommonTopAppBar("Daily Goals" , {
+                navController.popBackStack()
+            }
             )
-        }
-    ) { innerPadding ->
+        },
+        containerColor = Color.Black
+    ) { padding ->
 
         LazyColumn(
-            modifier = modifier
+            modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(padding)
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            // Header Card
+
             item {
-                Spacer(modifier = Modifier.height(8.dp))
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFF4D96FF).copy(alpha = 0.1f)
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.EmojiEvents,
-                            contentDescription = null,
-                            tint = Color(0xFF4D96FF),
-                            modifier = Modifier.size(48.dp)
-                        )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column {
-                            Text(
-                                text = "Set Your Daily Goals",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Stay motivated and track your progress",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                            )
-                        }
-                    }
-                }
+                Text(
+                    text = "Set Your Daily Performance Targets",
+                    color = Color(0xFF9E9E9E),
+                    fontSize = 13.sp
+                )
             }
 
-            // Step Goal
+            // ✅ STEP GOAL
             item {
-                GoalInputCard(
+                DarkGoalInputCard(
                     title = "Step Goal",
-                    icon = Icons.Default.DirectionsWalk,
                     value = editableStepGoal,
                     unit = "steps",
-                    iconColor = Color(0xFF4CAF50),
-                    onValueChange = { editableStepGoal = it },
-                    placeholder = "e.g., 10000"
+                    onValueChange = { editableStepGoal = it }
                 )
             }
 
-            // Calorie Goal
+            // ✅ CALORIE GOAL
             item {
-                GoalInputCard(
+                DarkGoalInputCard(
                     title = "Calorie Goal",
-                    icon = Icons.Default.LocalFireDepartment,
                     value = editableCalorieGoal,
                     unit = "kcal",
-                    iconColor = Color(0xFFFF9800),
-                    onValueChange = { editableCalorieGoal = it },
-                    placeholder = "e.g., 500"
+                    onValueChange = { editableCalorieGoal = it }
                 )
             }
 
-            // Distance Goal
+            // ✅ DISTANCE GOAL
             item {
-                GoalInputCard(
+                DarkGoalInputCard(
                     title = "Distance Goal",
-                    icon = Icons.Default.LocationOn,
                     value = editableDistanceGoal,
                     unit = "km",
-                    iconColor = Color(0xFF2196F3),
-                    onValueChange = { editableDistanceGoal = it },
-                    placeholder = "e.g., 8.0"
+                    onValueChange = { editableDistanceGoal = it }
                 )
             }
 
-            // Error message
+            // ✅ ERROR MESSAGE
             errorMessage?.let { error ->
                 item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = Color(0xFFFFEBEE)
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Warning,
-                                contentDescription = null,
-                                tint = Color(0xFFD32F2F)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = error,
-                                color = Color(0xFFD32F2F),
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        }
-                    }
+                    Text(
+                        text = error,
+                        color = Color(0xFFFF5252),
+                        fontSize = 13.sp
+                    )
                 }
             }
 
-            // Save Button
+            // ✅ SAVE BUTTON (REAL VM CALL)
             item {
                 Button(
                     onClick = {
                         val steps = editableStepGoal.toIntOrNull() ?: stepGoal
                         val calories = editableCalorieGoal.toIntOrNull() ?: calorieGoal
-                        val distance = ((editableDistanceGoal.toFloatOrNull() ?: (distanceGoal / 1000f)) * 1000).toInt()
-
-                        Log.d("GoalsSettings", "Saving goals: Steps=$steps, Calories=$calories, Distance=$distance")
+                        val distance =
+                            ((editableDistanceGoal.toFloatOrNull()
+                                ?: (distanceGoal / 1000f)) * 1000).toInt()
 
                         homeViewModel.setSportsGoals(
                             stepGoal = steps,
@@ -263,178 +242,59 @@ fun GoalsSettingsScreen(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp),
+                        .height(54.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF4D96FF),
-                        disabledContainerColor = Color(0xFFCCCCCC)
+                        containerColor = Color(0xFF00FF88)
                     ),
-                    enabled = !isLoading,
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(14.dp),
+                    enabled = !isLoading
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            strokeWidth = 2.dp,
-                            color = Color.White
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = "Saving...",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
+                            modifier = Modifier.size(22.dp),
+                            color = Color.Black
                         )
                     } else {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = "Save Goals",
-                            fontSize = 16.sp,
+                            "Save Goals",
+                            color = Color.Black,
                             fontWeight = FontWeight.Bold
                         )
                     }
                 }
             }
 
-            // Quick presets
+            // ✅ PRESETS
             item {
                 Text(
                     text = "Quick Presets",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 8.dp)
+                    color = Color(0xFF00FF88),
+                    fontWeight = FontWeight.SemiBold
                 )
             }
 
             item {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    PresetButton(
-                        text = "Beginner",
-                        modifier = Modifier.weight(1f),
-                        onClick = {
-                            editableStepGoal = "5000"
-                            editableCalorieGoal = "300"
-                            editableDistanceGoal = "4.0"
-                        }
-                    )
-                    PresetButton(
-                        text = "Active",
-                        modifier = Modifier.weight(1f),
-                        onClick = {
-                            editableStepGoal = "10000"
-                            editableCalorieGoal = "500"
-                            editableDistanceGoal = "8.0"
-                        }
-                    )
-                    PresetButton(
-                        text = "Athlete",
-                        modifier = Modifier.weight(1f),
-                        onClick = {
-                            editableStepGoal = "15000"
-                            editableCalorieGoal = "800"
-                            editableDistanceGoal = "12.0"
-                        }
-                    )
+                    DarkPresetButton("Beginner") {
+                        editableStepGoal = "5000"
+                        editableCalorieGoal = "300"
+                        editableDistanceGoal = "4.0"
+                    }
+                    DarkPresetButton("Active") {
+                        editableStepGoal = "10000"
+                        editableCalorieGoal = "500"
+                        editableDistanceGoal = "8.0"
+                    }
+                    DarkPresetButton("Athlete") {
+                        editableStepGoal = "15000"
+                        editableCalorieGoal = "800"
+                        editableDistanceGoal = "12.0"
+                    }
                 }
-            }
-
-            // Bottom spacer
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
 }
 
-@Composable
-fun GoalInputCard(
-    title: String,
-    icon: ImageVector,
-    value: String,
-    unit: String,
-    iconColor: Color,
-    onValueChange: (String) -> Unit,
-    placeholder: String
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .background(iconColor.copy(alpha = 0.1f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = iconColor,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(16.dp))
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            OutlinedTextField(
-                value = value,
-                onValueChange = onValueChange,
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text(placeholder) },
-                suffix = { Text(unit, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = iconColor,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                )
-            )
-        }
-    }
-}
-
-@Composable
-fun PresetButton(
-    text: String,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    OutlinedButton(
-        onClick = onClick,
-        modifier = modifier.height(48.dp),
-        shape = RoundedCornerShape(12.dp),
-        colors = ButtonDefaults.outlinedButtonColors(
-            contentColor = Color(0xFF4D96FF)
-        ),
-        border = BorderStroke(1.dp, Color(0xFF4D96FF).copy(alpha = 0.5f))
-    ) {
-        Text(
-            text = text,
-            fontWeight = FontWeight.Medium,
-            fontSize = 14.sp
-        )
-    }
-}

@@ -14,19 +14,22 @@ import androidx.compose.ui.platform.LocalContext
 import com.oudmon.ble.base.communication.CommandHandle
 import dev.infa.page3.models.DeviceCapabilities
 import dev.infa.page3.models.HealthData
+import dev.infa.page3.ui.components.DeviceCapabilityScreen
+import dev.infa.page3.ui.components.DeviceDetailScreen
 import dev.infa.page3.ui.screens.HomeScreen
 import dev.infa.page3.ui.screens.MetricDetailScreen
 import dev.infa.page3.ui.screens.HeartRateScreen
 import dev.infa.page3.ui.screens.StressScreen
 import dev.infa.page3.ui.screens.BloodPressureScreen
 import dev.infa.page3.ui.screens.BloodOxygenScreen
+import dev.infa.page3.ui.screens.DashboardScreen
 import dev.infa.page3.ui.screens.GoalsSettingsScreen
 import dev.infa.page3.ui.screens.SleepScreen
-import dev.infa.page3.ui.screens.StepScreen
 import dev.infa.page3.ui.screens.HrvScreen
 import dev.infa.page3.ui.screens.ProfileScreen
 import dev.infa.page3.ui.screens.ScannerScreen
 import dev.infa.page3.ui.screens.ExerciseScreen
+import dev.infa.page3.ui.screens.StepsScreen
 import dev.infa.page3.viewmodels.BloodOxygenViewModel
 import dev.infa.page3.viewmodels.BloodPressureViewModel
 import dev.infa.page3.viewmodels.ConnectionViewModel
@@ -60,6 +63,8 @@ object Routes {
     const val BloodOxygen = "spo2"
     const val HRV = "hrv"
     const val Scan = "scan"
+    const val DeviceDetail = "device_detail"
+    const val DeviceCapability = "device_capability"
 }
 @Composable
 fun AppNavigation() {
@@ -71,20 +76,24 @@ fun AppNavigation() {
     val deviceAddress = uiState.connectedDevice?.deviceAddress ?: ""
     val exerciseVmFactory = remember { ExerciseViewModelFactory(null) }
     val exerciseViewModel: ExerciseViewModel = viewModel(factory = exerciseVmFactory)
+    val homeFactory = remember { HomeViewModelFactory( ) }
+    val homeVm: HomeViewModel = viewModel(factory = homeFactory)
+    val factory = remember { StepViewModelFactory( deviceAddress) }
+    val stepviewmodel: StepViewmodel = viewModel(factory = factory)
 
     NavHost(navController = navController, startDestination = Routes.Home) {
 
         composable(Routes.Home) {
-            val homeFactory = remember { HomeViewModelFactory( ) }
-            val homeVm: HomeViewModel = viewModel(factory = homeFactory)
             LaunchedEffect(isConnected) {
-                if (isConnected) homeVm.refreshAll()
+
             }
             HomeScreen(
-                modifier = Modifier.fillMaxSize(),
-                connectionViewModel = connectionViewModel,
-                homeViewModel = homeVm,
-                navController = navController
+                Modifier,
+                connectionViewModel
+                ,homeVm,
+                stepViewModel = stepviewmodel,
+                navController
+
             )
         }
         // ============ Exercise Screen ============
@@ -156,12 +165,9 @@ fun AppNavigation() {
 
         // ============ Step Screen ============
         composable(Routes.Step) {
-            val factory = remember { StepViewModelFactory( deviceAddress) }
-            val viewModel: StepViewmodel = viewModel(factory = factory)
-            StepScreen(
-                viewModel = viewModel,
-                navController = navController
-            )
+            val homeFactory = remember { HomeViewModelFactory( ) }
+
+            StepsScreen(stepviewmodel, connectionViewModel, homeVm , {})
         }
 
         // ============ Connect Screen ============
@@ -183,6 +189,12 @@ fun AppNavigation() {
             val homeFactory = remember { HomeViewModelFactory( ) }
             val homeVm: HomeViewModel = viewModel(factory = homeFactory)
             GoalsSettingsScreen(homeViewModel =  homeVm ,navController)
+        }
+        composable(Routes.DeviceDetail) {
+            DeviceDetailScreen(connectionViewModel , navController)
+        }
+        composable(Routes.DeviceCapability) {
+            DeviceCapabilityScreen(connectionViewModel)
         }
     }
 }
@@ -215,7 +227,7 @@ class StepViewModelFactory(
             val dataSync = DataSynchronization(commandHandle) { log ->
                 Log.d("StepViewModel", log)
             }
-            return StepViewmodel(dataSync) as T
+            return StepViewmodel() as T
         }
         throw IllegalArgumentException("Unknown ViewModel: ${modelClass.name}")
     }

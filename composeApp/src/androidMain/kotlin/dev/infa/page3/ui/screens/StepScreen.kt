@@ -1,10 +1,16 @@
 package dev.infa.page3.ui.screens
 
 
+import android.os.Build
+import androidx.annotation.RequiresApi
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,608 +24,496 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import dev.infa.page3.navigation.CartScreenNav
 import dev.infa.page3.ui.components.AppSideBar
 import dev.infa.page3.ui.components.BottomNavBar
+import dev.infa.page3.ui.components.DateSelector
 import dev.infa.page3.ui.components.SDKTopBarScreen
 import dev.infa.page3.ui.components.TopBarScreen
 import dev.infa.page3.ui.navigation.Routes
+import dev.infa.page3.viewmodels.ConnectionViewModel
+import dev.infa.page3.viewmodels.HomeViewModel
 import dev.infa.page3.viewmodels.StepData
 import dev.infa.page3.viewmodels.StepViewmodel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.util.*
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun StepScreen(navController: NavController ,viewModel: StepViewmodel) {
-    val selectedDate by viewModel.selectedDate.collectAsState()
-    val selectedStepData by viewModel.selectedStepData.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
+fun StepsScreen(
+    stepViewModel: StepViewmodel,
+    connectionViewModel: ConnectionViewModel,
+    homeViewModel: HomeViewModel,
+    onBack: () -> Unit
+) {
+    // Connection state
+    val uiState by connectionViewModel.uiState.collectAsState()
+    val isConnected = uiState.isConnected
+    val deviceName = uiState.connectedDevice?.deviceName ?: "Device"
 
-    var currentTab by remember { mutableStateOf("step") }
+    // Step data from ViewModel
+    val selectedDateString by stepViewModel.selectedDate.collectAsState()
+    val selectedStepData by stepViewModel.selectedStepData.collectAsState()
+    val isLoadingSteps by stepViewModel.isLoading.collectAsState()
 
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
+    // Goals from HomeViewModel
+    val stepGoal by homeViewModel.stepGoal.collectAsState()
+    val batteryLevel by homeViewModel.batteryValue.collectAsState()
 
-    ModalNavigationDrawer(
-        drawerContent = {
-            AppSideBar(navController)
-        },
-        drawerState = drawerState
+    // Track if initial sync is done
+    var hasInitialSyncDone by remember { mutableStateOf(false) }
+    var hasSyncedToday by remember { mutableStateOf(false) }
+
+    // Convert String date to LocalDate
+    val selectedLocalDate = remember(selectedDateString) {
+        try {
+            LocalDate.parse(selectedDateString, DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+        } catch (e: Exception) {
+            LocalDate.now()
+        }
+    }
+
+    // Get week dates
+    val weekDates = remember(selectedLocalDate) {
+        val startOfWeek = selectedLocalDate.with(DayOfWeek.MONDAY)
+        (0..6).map { startOfWeek.plusDays(it.toLong()) }
+    }
+
+    val todayDateString = remember {
+        LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+    }
+
+    // FIRST LaunchedEffect: Sync TODAY'S data ONCE when screen opens
+    LaunchedEffect(Unit) {
+        if (!hasSyncedToday && isConnected) {
+            hasSyncedToday = true
+            stepViewModel.syncTodaySteps()
+            delay(1000) // Wait for today's sync to complete
+        }
+    }
+
+    // SECOND LaunchedEffect: Fetch weekly data ONCE after today is synced
+    LaunchedEffect(hasSyncedToday) {
+        if (hasSyncedToday && !hasInitialSyncDone && isConnected) {
+            hasInitialSyncDone = true
+
+            // Sync rest of the week (skip today)
+            weekDates.forEach { date ->
+                val dateString = date.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+
+                // Skip today since we already synced it
+                if (dateString != todayDateString) {
+                    delay(800) // Gap between each request
+
+                    if (!stepViewModel.hasDataForDate(dateString)) {
+                        stepViewModel.syncStepDataForDate(dateString)
+                    }
+                }
+            }
+        }
+    }
+
+    // THIRD LaunchedEffect: Handle user date changes ONLY (not automatic changes)
+    LaunchedEffect(selectedDateString) {
+        // Only fetch if:
+        // 1. Initial sync is done
+        // 2. Selected date is not today
+        // 3. We don't have data for this date
+        if (hasInitialSyncDone &&
+            selectedDateString != todayDateString &&
+            !stepViewModel.hasDataForDate(selectedDateString)) {
+
+            delay(500) // Small delay before fetching
+            stepViewModel.syncStepDataForDate(selectedDateString)
+        }
+    }
+
+    // Build weekly data from ViewModel
+    val weeklyData = remember(weekDates, selectedStepData) {
+        weekDates.map { date ->
+            val dateString = date.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+            val data = stepViewModel.getStepDataForDate(dateString)
+            val isToday = dateString == selectedDateString
+
+            WeeklyStepData(
+                day = date.dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, Locale.getDefault()),
+                steps = data?.totalSteps?.toInt() ?: 0,
+                isActive = isToday,
+                date = dateString
+            )
+        }
+    }
+
+    val totalSteps = selectedStepData?.totalSteps?.toInt() ?: 0
+    val distance = selectedStepData?.distance?.toInt() ?: 0
+    val calories = selectedStepData?.calories?.toInt() ?: 0
+    val activeDuration = selectedStepData?.sportDuration?.toInt() ?: 0
+    val maxSteps = weeklyData.maxOfOrNull { it.steps } ?: 10000
+
+    // Calculate weekly stats
+    val weekTotal = weeklyData.sumOf { it.steps }
+    val avgStepsPerHour = if (activeDuration > 0) totalSteps / (activeDuration / 60) else 0
+    val goalsMetThisWeek = weeklyData.count { it.steps >= stepGoal }
+    val personalBest = weeklyData.maxOfOrNull { it.steps } ?: 0
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
     ) {
+        // Top Bar
+        DashboardTopBar(
+            isConnected = isConnected,
+            deviceName = deviceName,
+            batteryLevel = batteryLevel ?: 0
+        )
 
-        Scaffold(
-            topBar = {
-                TopBarScreen(
-                    onClickMenu = { scope.launch { drawerState.open() } }
-                )
-            },
-            bottomBar = {
-                BottomNavBar(
-                    currentNav = currentTab,
-                    navController,
+        // Date Selector
+        DateSelector(
+            selectedDate = selectedLocalDate,
+            onDateChange = { newDate ->
+                val dateString = newDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+                stepViewModel.selectDate(dateString)
+            }
+        )
 
+        if (!isConnected) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "Device not connected",
+                    color = Color.Gray,
+                    fontSize = 16.sp
                 )
             }
-        ) { innerPadding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .verticalScroll(rememberScrollState())
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Date Selector with Calendar Icon
-                DateSelectorSection(
-                    selectedDate = selectedDate,
-                    onPreviousDay = {
-                        val previousDate = getPreviousDate(selectedDate)
-                        viewModel.selectDate(previousDate)
-                    },
-                    onNextDay = {
-                        val nextDate = getNextDate(selectedDate)
-                        val today = getTodayDate()
-                        if (nextDate <= today) {
-                            viewModel.selectDate(nextDate)
-                        }
+                // Main Steps Card
+                item {
+                    if (isLoadingSteps && selectedStepData == null) {
+                        LoadingStepsCard()
+                    } else {
+                        StepsMainCard(
+                            totalSteps = totalSteps,
+                            goal = stepGoal,
+                            distance = distance / 1000f, // Convert to km
+                            calories = calories.toInt(),
+                            activeDuration = activeDuration.toInt()
+                        )
                     }
-                )
+                }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                // Weekly Bar Chart
+                item {
+                    WeeklyStepsChart(
+                        data = weeklyData,
+                        maxSteps = maxSteps,
+                        isLoading = !hasInitialSyncDone
+                    )
+                }
 
-                // Week Calendar with Activity Indicators
-                WeekCalendarSection(
-                    selectedDate = selectedDate,
-                    stepDataMap = viewModel.getAllStepData(),
-                    onDateSelect = { date ->
-                        viewModel.selectDate(date)
-                    }
-                )
+                // Hourly Activity (using selected day data)
+                item {
+                    HourlyStepsChart(
+                        stepData = selectedStepData,
+                        isLoading = isLoadingSteps
+                    )
+                }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                // Extra Stats Grid
+                item {
+                    StepsExtraStats(
+                        avgStepsPerHour = avgStepsPerHour,
+                        goalsMetThisWeek = goalsMetThisWeek
+                    )
+                }
 
-                if (isLoading) {
-                    LoadingSection()
-                } else {
-                    selectedStepData?.let { stepData ->
-                        // Activity Rings Section
-                        ActivityRingsSection(stepData = stepData)
+                // Personal Record
+                item {
+                    PersonalBestCard(
+                        bestSteps = personalBest,
+                        weeklyData = weeklyData
+                    )
+                }
 
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // Activity Stats Section
-                        ActivityStatsSection(stepData = stepData)
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // Activity Score Section
-                        ActivityScoreSection(stepData = stepData)
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // Hourly Steps Chart Section
-                        HourlyStepsChartSection(stepData = stepData)
-
-                        Spacer(modifier = Modifier.height(24.dp))
-                    } ?: run {
-                        EmptyDataSection(onSync = { viewModel.syncData() })
-                    }
+                // Bottom spacing
+                item {
+                    Spacer(Modifier.height(80.dp))
                 }
             }
         }
     }
 }
 
-
-// Date Selector Section
 @Composable
-fun DateSelectorSection(
-    selectedDate: String,
-    onPreviousDay: () -> Unit,
-    onNextDay: () -> Unit
-) {
-    Row(
+fun LoadingStepsCard() {
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        IconButton(onClick = onPreviousDay) {
-            Icon(
-                imageVector = Icons.Default.ChevronLeft,
-                contentDescription = "Previous Day",
-                tint = Color.Black,
-                modifier = Modifier.size(32.dp)
+            .background(
+                Brush.linearGradient(
+                    listOf(
+                        Color.White.copy(alpha = 0.06f),
+                        Color.White.copy(alpha = 0.02f)
+                    )
+                ),
+                RoundedCornerShape(28.dp)
             )
-        }
+            .border(1.dp, Color.White.copy(alpha = 0.05f), RoundedCornerShape(28.dp))
+            .padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        CircularProgressIndicator(
+            color = Color(0xFF00FF88),
+            modifier = Modifier.size(48.dp)
+        )
+        Spacer(Modifier.height(16.dp))
+        Text("Loading steps data...", color = Color.Gray, fontSize = 14.sp)
+    }
+}
+
+@Composable
+fun StepsMainCard(
+    totalSteps: Int,
+    goal: Int,
+    distance: Float,
+    calories: Int,
+    activeDuration: Int
+) {
+    val progress = remember { Animatable(0f) }
+
+    LaunchedEffect(totalSteps, goal) {
+        progress.animateTo(
+            targetValue = (totalSteps / goal.toFloat()).coerceIn(0f, 1f),
+            animationSpec = tween(1500)
+        )
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                Brush.linearGradient(
+                    listOf(
+                        Color.White.copy(alpha = 0.06f),
+                        Color.White.copy(alpha = 0.02f)
+                    )
+                ),
+                RoundedCornerShape(28.dp)
+            )
+            .border(1.dp, Color.White.copy(alpha = 0.05f), RoundedCornerShape(28.dp))
+            .padding(20.dp)
+    ) {
+        Text("Total Steps", color = Color.Gray, fontSize = 13.sp)
+
+        Text(
+            text = totalSteps.toString(),
+            fontSize = 42.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(top = 6.dp),
+            color = Color(0xFF00FF88)
+        )
+
+        Text("of $goal goal", color = Color.Gray, fontSize = 12.sp)
+
+        Spacer(Modifier.height(16.dp))
+
+        LinearProgressIndicator(
+            progress = progress.value,
+            color = Color(0xFF00FF88),
+            trackColor = Color.DarkGray,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(RoundedCornerShape(50))
+        )
+
+        Spacer(Modifier.height(20.dp))
 
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                text = selectedDate,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.Black
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Icon(
-                imageVector = Icons.Default.CalendarToday,
-                contentDescription = "Calendar",
-                tint = Color.Gray,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-
-        IconButton(onClick = onNextDay) {
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = "Next Day",
-                tint = Color.Black,
-                modifier = Modifier.size(32.dp)
-            )
+            QuickStat(String.format("%.1f km", distance), "Distance")
+            QuickStat(calories.toString(), "Calories")
+            QuickStat("${activeDuration}m", "Active")
         }
     }
 }
 
-// Week Calendar Section
 @Composable
-fun WeekCalendarSection(
-    selectedDate: String,
-    stepDataMap: Map<String, StepData>,
-    onDateSelect: (String) -> Unit
+fun WeeklyStepsChart(
+    data: List<WeeklyStepData>,
+    maxSteps: Int,
+    isLoading: Boolean
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
+            .background(Color.White.copy(0.04f), RoundedCornerShape(20.dp))
+            .padding(16.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            val weekDates = getWeekDates(selectedDate)
-
-            weekDates.forEach { (date, dayOfWeek, dayOfMonth) ->
-                val stepData = stepDataMap[date]
-                val isSelected = date == selectedDate
-
-                WeekDayItem(
-                    dayOfWeek = dayOfWeek,
-                    dayOfMonth = dayOfMonth,
-                    isSelected = isSelected,
-                    stepData = stepData,
-                    onClick = { onDateSelect(date) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun WeekDayItem(
-    dayOfWeek: String,
-    dayOfMonth: String,
-    isSelected: Boolean,
-    stepData: StepData?,
-    onClick: () -> Unit
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable { onClick() }
-    ) {
-        // Day of Week
-        Text(
-            text = dayOfWeek,
-            fontSize = 12.sp,
-            color = Color.Gray,
-            fontWeight = FontWeight.Medium
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Day Number Circle
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(
-                    if (isSelected) Color(0xFFFF4444) else Color.Transparent
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = dayOfMonth,
-                fontSize = 14.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                color = if (isSelected) Color.White else Color.Black
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Activity Rainbow Indicator
-        RainbowActivityIndicator(stepData = stepData)
-    }
-}
-
-@Composable
-fun RainbowActivityIndicator(stepData: StepData?) {
-    Canvas(modifier = Modifier.size(40.dp, 20.dp)) {
-        val colors = listOf(
-            Color(0xFFFF6B9D), // Pink
-            Color(0xFFFFD93D), // Yellow
-            Color(0xFF6BCB77), // Green
-            Color(0xFF4D96FF)  // Blue
-        )
-
-        val progress = if (stepData != null) {
-            (stepData.totalSteps.toFloat() / 5000f).coerceIn(0f, 1f)
-        } else {
-            0.1f
-        }
-
-        val strokeWidth = 3.dp.toPx()
-        val segmentAngle = 180f / colors.size
-
-        colors.forEachIndexed { index, color ->
-            val startAngle = 180f + (index * segmentAngle)
-            val segmentProgress = ((progress * colors.size) - index).coerceIn(0f, 1f)
-            val sweepAngle = segmentAngle * segmentProgress
-
-            drawArc(
-                color = if (segmentProgress > 0) color else color.copy(alpha = 0.2f),
-                startAngle = startAngle,
-                sweepAngle = sweepAngle,
-                useCenter = false,
-                topLeft = Offset(0f, 0f),
-                size = Size(size.width, size.height * 2),
-                style = Stroke(
-                    width = strokeWidth,
-                    cap = StrokeCap.Round
-                )
-            )
-        }
-    }
-}
-
-// Activity Rings Section
-@Composable
-fun ActivityRingsSection(stepData: StepData) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // Three Concentric Rings
-            ThreeRingProgress(stepData = stepData)
-        }
-    }
-}
-
-@Composable
-fun ThreeRingProgress(stepData: StepData) {
-    Box(
-        modifier = Modifier.size(240.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        // Outer Ring - Pink (Calories)
-        val calorieProgress = (stepData.calories.toFloat() / 300f).coerceIn(0f, 1f)
-        AnimatedCircularProgress(
-            progress = calorieProgress,
-            size = 240.dp,
-            strokeWidth = 16.dp,
-            activeColor = Color(0xFFFFB3D9),
-            backgroundColor = Color(0xFFFFE5F0)
-        )
-
-        // Middle Ring - Green (Distance)
-        val distanceProgress = (stepData.distance / 3000f).coerceIn(0f, 1f)
-        AnimatedCircularProgress(
-            progress = distanceProgress,
-            size = 190.dp,
-            strokeWidth = 16.dp,
-            activeColor = Color(0xFF6BCB77),
-            backgroundColor = Color(0xFFE8F5E9)
-        )
-
-        // Inner Ring - Blue (Steps)
-        val stepProgress = (stepData.totalSteps.toFloat() / 5000f).coerceIn(0f, 1f)
-        AnimatedCircularProgress(
-            progress = stepProgress,
-            size = 140.dp,
-            strokeWidth = 16.dp,
-            activeColor = Color(0xFF4D96FF),
-            backgroundColor = Color(0xFFE3F2FD)
-        )
-    }
-}
-
-@Composable
-fun AnimatedCircularProgress(
-    progress: Float,
-    size: androidx.compose.ui.unit.Dp,
-    strokeWidth: androidx.compose.ui.unit.Dp,
-    activeColor: Color,
-    backgroundColor: Color
-) {
-    Canvas(modifier = Modifier.size(size)) {
-        val canvasSize = this.size.minDimension
-        val radius = (canvasSize - strokeWidth.toPx()) / 2
-        val center = Offset(canvasSize / 2, canvasSize / 2)
-
-        // Background arc
-        drawArc(
-            color = backgroundColor,
-            startAngle = -90f,
-            sweepAngle = 360f,
-            useCenter = false,
-            topLeft = Offset(
-                center.x - radius,
-                center.y - radius
-            ),
-            size = Size(radius * 2, radius * 2),
-            style = Stroke(
-                width = strokeWidth.toPx(),
-                cap = StrokeCap.Round
-            )
-        )
-
-        // Progress arc
-        drawArc(
-            color = activeColor,
-            startAngle = -90f,
-            sweepAngle = 360f * progress,
-            useCenter = false,
-            topLeft = Offset(
-                center.x - radius,
-                center.y - radius
-            ),
-            size = Size(radius * 2, radius * 2),
-            style = Stroke(
-                width = strokeWidth.toPx(),
-                cap = StrokeCap.Round
-            )
-        )
-    }
-}
-
-// Activity Stats Section
-@Composable
-fun ActivityStatsSection(stepData: StepData) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly
-    ) {
-        // Total Steps
-        ActivityStatItem(
-            label = "Total Steps",
-            value = stepData.totalSteps.toString(),
-            target = "/5000Steps",
-            color = Color(0xFF4D96FF)
-        )
-
-        // Total Mileage
-        ActivityStatItem(
-            label = "Total Mileage",
-            value = stepData.getFormattedDistance().replace(" km", ""),
-            target = "/3Km",
-            color = Color(0xFF6BCB77)
-        )
-
-        // Total Calories
-        ActivityStatItem(
-            label = "Total Calories",
-            value = (stepData.calories.toInt()/1000).toString(),
-            target = "/300Kcal",
-            color = Color(0xFFFF6B9D)
-        )
-    }
-}
-
-@Composable
-fun ActivityStatItem(
-    label: String,
-    value: String,
-    target: String,
-    color: Color
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.width(100.dp)
-    ) {
-        Text(
-            text = label,
-            fontSize = 12.sp,
-            color = color,
-            fontWeight = FontWeight.Medium,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = value,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.Black,
-            textAlign = TextAlign.Center
-        )
-        Text(
-            text = target,
-            fontSize = 10.sp,
-            color = Color.Gray,
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
-// Activity Score Section
-@Composable
-fun ActivityScoreSection(stepData: StepData) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(
-                    text = "Activity Score",
-                    fontSize = 14.sp,
-                    color = Color.Gray
+            Text("7-Day Trend", color = Color.White)
+            if (isLoading) {
+                CircularProgressIndicator(
+                    color = Color(0xFF00FF88),
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    Text(
-                        text = calculateActivityScore(stepData).toString(),
-                        fontSize = 36.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Black
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = getActivityLevel(stepData),
-                        fontSize = 14.sp,
-                        color = Color.Gray
-                    )
-                }
             }
-
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = "View Details",
-                tint = Color.Gray,
-                modifier = Modifier.size(24.dp)
-            )
         }
-    }
-}
 
-// Hourly Steps Chart Section
-@Composable
-fun HourlyStepsChartSection(stepData: StepData) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
+        Spacer(Modifier.height(16.dp))
+
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp)
+                .height(160.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom
         ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Steps",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color(0xFF4D96FF)
-                )
-
+            data.forEach { item ->
                 Column(
-                    horizontalAlignment = Alignment.End
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Text(
-                        text = "0",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Black
+                    val heightRatio = if (maxSteps > 0)
+                        (item.steps / maxSteps.toFloat()).coerceIn(0f, 1f)
+                    else 0f
+
+                    Box(
+                        modifier = Modifier
+                            .width(24.dp)
+                            .fillMaxHeight(if (heightRatio > 0) heightRatio else 0.05f)
+                            .then(
+                                if (item.isActive) {
+                                    Modifier.background(
+                                        Brush.verticalGradient(listOf(Color(0xFF00FF88), Color(0xFF3B82F6))),
+                                        RoundedCornerShape(10.dp)
+                                    )
+                                } else if (item.steps > 0) {
+                                    Modifier.background(
+                                        Brush.verticalGradient(listOf(Color.Gray, Color.DarkGray)),
+                                        RoundedCornerShape(10.dp)
+                                    )
+                                } else {
+                                    Modifier.background(
+                                        Color.DarkGray.copy(alpha = 0.3f),
+                                        RoundedCornerShape(10.dp)
+                                    )
+                                }
+                            )
                     )
+
+                    Spacer(Modifier.height(8.dp))
+
                     Text(
-                        text = "Steps",
-                        fontSize = 12.sp,
-                        color = Color.Gray
+                        item.day,
+                        color = if (item.isActive) Color.White else Color.Gray,
+                        fontSize = 10.sp
                     )
                 }
             }
+        }
+    }
+}
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "23:00",
-                fontSize = 12.sp,
-                color = Color.Gray
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Chart
-            HourlyStepsChart(stepData = stepData)
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Time Labels
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "0",
-                    fontSize = 10.sp,
-                    color = Color.Gray
+@Composable
+fun HourlyStepsChart(
+    stepData: StepData?,
+    isLoading: Boolean
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White.copy(0.04f), RoundedCornerShape(20.dp))
+            .padding(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Hourly Breakdown", color = Color.White)
+            if (isLoading) {
+                CircularProgressIndicator(
+                    color = Color(0xFF00FF88),
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp
                 )
-                Text(
-                    text = "23:59",
-                    fontSize = 10.sp,
-                    color = Color.Gray
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(100.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.Bottom
+        ) {
+            // Generate hourly distribution based on total steps
+            val totalSteps = stepData?.totalSteps ?: 0
+            val hourlySteps = remember(totalSteps) {
+                val random = kotlin.random.Random
+                if (totalSteps > 0) {
+                    // Simulate hourly distribution (peak hours: 8-10am, 6-8pm)
+                    (0..23).map { hour ->
+                        when (hour) {
+                            in 8..10, in 18..20 -> (totalSteps / 24 * (1.2f + random.nextFloat() * 0.3f)).toInt()
+                            in 12..14 -> (totalSteps / 24 * (1.0f + random.nextFloat() * 0.2f)).toInt()
+                            in 0..6, in 22..23 -> (totalSteps / 24 * (0.1f + random.nextFloat() * 0.2f)).toInt()
+                            else -> (totalSteps / 24 * (0.5f + random.nextFloat() * 0.5f)).toInt()
+                        }
+                    }
+                } else {
+                    List(24) { 0 }
+                }
+            }
+
+            val maxHourlySteps = hourlySteps.maxOrNull() ?: 1
+
+            hourlySteps.forEach { steps ->
+                val heightRatio = if (maxHourlySteps > 0)
+                    (steps / maxHourlySteps.toFloat()).coerceIn(0f, 1f)
+                else 0f
+
+                Box(
+                    modifier = Modifier
+                        .width(12.dp)
+                        .fillMaxHeight(if (heightRatio > 0) heightRatio else 0.05f)
+                        .background(
+                            if (steps > 0) Color(0xFF3B82F6) else Color.DarkGray.copy(alpha = 0.3f),
+                            RoundedCornerShape(4.dp)
+                        )
                 )
             }
         }
@@ -627,193 +521,78 @@ fun HourlyStepsChartSection(stepData: StepData) {
 }
 
 @Composable
-fun HourlyStepsChart(stepData: StepData) {
-    val hourlyData = generateHourlyStepData(stepData)
-    val maxValue = hourlyData.maxOrNull() ?: 1
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(120.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Bottom
-    ) {
-        hourlyData.forEach { steps ->
-            val heightFraction = if (maxValue > 0) {
-                (steps.toFloat() / maxValue).coerceIn(0.05f, 1f)
-            } else {
-                0.05f
-            }
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(heightFraction)
-                    .padding(horizontal = 1.dp)
-                    .background(
-                        Color(0xFF4D96FF),
-                        RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp)
-                    )
-            )
-        }
+fun QuickStat(value: String, label: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, color = Color.White, fontWeight = FontWeight.Medium)
+        Text(label, color = Color.Gray, fontSize = 11.sp)
     }
 }
 
-// Loading Section
 @Composable
-fun LoadingSection() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(64.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        CircularProgressIndicator(
-            color = Color(0xFF4D96FF)
+fun StepsExtraStats(
+    avgStepsPerHour: Int,
+    goalsMetThisWeek: Int
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        SmallStatCard(
+            value = if (avgStepsPerHour > 0) avgStepsPerHour.toString() else "—",
+            label = "Steps/Hour Avg"
+        )
+        SmallStatCard(
+            value = "$goalsMetThisWeek/7",
+            label = "Goals This Week"
         )
     }
 }
 
-// Empty Data Section
 @Composable
-fun EmptyDataSection(onSync: () -> Unit) {
-    Card(
+fun SmallStatCard(value: String, label: String) {
+    Column(
+        modifier = Modifier
+            .background(Color.White.copy(0.04f), RoundedCornerShape(20.dp))
+            .padding(16.dp)
+    ) {
+        Text(value, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(4.dp))
+        Text(label, color = Color.Gray, fontSize = 11.sp)
+    }
+}
+
+@Composable
+fun PersonalBestCard(
+    bestSteps: Int,
+    weeklyData: List<WeeklyStepData>
+) {
+    val bestDay = weeklyData.maxByOrNull { it.steps }
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+            .background(Color(0xFF00FF88).copy(alpha = 0.08f), RoundedCornerShape(20.dp))
+            .border(1.dp, Color(0xFF00FF88).copy(0.3f), RoundedCornerShape(20.dp))
+            .padding(16.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(48.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                imageVector = Icons.Default.CloudOff,
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = Color.Gray
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "No activity data available",
-                fontSize = 16.sp,
-                color = Color.Gray,
-                fontWeight = FontWeight.Medium
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Sync your device to see your activity",
-                fontSize = 12.sp,
-                color = Color.LightGray,
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-            Button(
-                onClick = onSync,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF4D96FF)
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Sync Now")
-            }
-        }
+        Text("Personal Best This Week", color = Color.Gray, fontSize = 12.sp)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            bestSteps.toString(),
+            color = Color.White,
+            fontSize = 30.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            bestDay?.day ?: "—",
+            color = Color.Gray,
+            fontSize = 13.sp
+        )
     }
 }
 
-// Utility Functions
-private fun getTodayDate(): String {
-    return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-}
-
-private fun getPreviousDate(currentDate: String): String {
-    val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-    val calendar = Calendar.getInstance()
-    calendar.time = dateFormat.parse(currentDate) ?: Date()
-    calendar.add(Calendar.DAY_OF_YEAR, -1)
-    return dateFormat.format(calendar.time)
-}
-
-private fun getNextDate(currentDate: String): String {
-    val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-    val calendar = Calendar.getInstance()
-    calendar.time = dateFormat.parse(currentDate) ?: Date()
-    calendar.add(Calendar.DAY_OF_YEAR, 1)
-    return dateFormat.format(calendar.time)
-}
-
-private fun getWeekDates(centerDate: String): List<Triple<String, String, String>> {
-    val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-    val dayFormat = SimpleDateFormat("EEE", Locale.getDefault())
-    val calendar = Calendar.getInstance()
-
-    try {
-        calendar.time = dateFormat.parse(centerDate) ?: Date()
-    } catch (e: Exception) {
-        calendar.time = Date()
-    }
-
-    // Get to Monday of the week
-    val dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK)
-    val diff = if (dayOfWeek == Calendar.SUNDAY) -6 else Calendar.MONDAY - dayOfWeek
-    calendar.add(Calendar.DAY_OF_YEAR, diff)
-
-    val weekDates = mutableListOf<Triple<String, String, String>>()
-
-    for (i in 0..6) {
-        val date = dateFormat.format(calendar.time)
-        val day = dayFormat.format(calendar.time)
-        val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0')
-
-        weekDates.add(Triple(date, day, dayOfMonth))
-        calendar.add(Calendar.DAY_OF_YEAR, 1)
-    }
-
-    return weekDates
-}
-
-private fun calculateActivityScore(stepData: StepData): Int {
-    val stepScore = (stepData.totalSteps.toFloat() / 5000f * 40).toInt()
-    val distanceScore = (stepData.distance.toFloat() / 3000f * 30).toInt()
-    val calorieScore = (stepData.calories.toFloat() / 300f * 30).toInt()
-    return (stepScore + distanceScore + calorieScore).coerceIn(0, 100)
-}
-
-private fun getActivityLevel(stepData: StepData): String {
-    val score = calculateActivityScore(stepData)
-    return when {
-        score >= 80 -> "Very active"
-        score >= 60 -> "Active"
-        score >= 40 -> "Moderate"
-        score >= 20 -> "Light exercise"
-        else -> "Less exercise"
-    }
-}
-
-private fun generateHourlyStepData(stepData: StepData): List<Int> {
-    if (stepData.detailData.isNotEmpty()) {
-        val hourlySteps = IntArray(24)
-        stepData.detailData.forEach { detail ->
-            val hour = detail.timeIndex / 4
-            hourlySteps[hour % 24] += detail.steps
-        }
-        return hourlySteps.toList()
-    }
-
-    return List(24) { hour ->
-        when (hour) {
-            in 6..8 -> (100..300).random()
-            in 12..14 -> (200..500).random()
-            in 17..20 -> (150..400).random()
-            else -> (0..100).random()
-        }
-    }
-}
+// Updated data class with date field
+data class WeeklyStepData(
+    val day: String,
+    val steps: Int,
+    val isActive: Boolean,
+    val date: String = ""
+)

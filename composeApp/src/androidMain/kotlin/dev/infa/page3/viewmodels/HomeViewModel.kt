@@ -121,22 +121,6 @@ class HomeViewModel : ViewModel() {
         }
     }
 
-    fun refreshAll() {
-        viewModelScope.launch {
-            try {
-                _isLoading.value = true
-                _errorMessage.value = null
-                withTimeoutOrNull(8000) { syncTodayStepsAsync() }
-            } catch (e: TimeoutCancellationException) {
-                _errorMessage.value = "Sync timeout"
-            } catch (e: Exception) {
-                _errorMessage.value = "Failed to sync data: ${e.message}"
-            } finally {
-                _isLoading.value = false
-            }
-        }
-    }
-
     private fun createHardcodedSleepData() {
         val sleepData = SleepData(
             date = getCurrentDate(),
