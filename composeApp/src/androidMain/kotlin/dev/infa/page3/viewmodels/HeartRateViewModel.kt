@@ -1,438 +1,272 @@
 package dev.infa.page3.viewmodels
 
+import android.content.Context
+import android.content.SharedPreferences
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.gson.Gson
 import com.oudmon.ble.base.bluetooth.BleOperateManager
-import dev.infa.page3.models.HealthData
 import com.oudmon.ble.base.communication.CommandHandle
 import com.oudmon.ble.base.communication.ICommandResponse
-import com.oudmon.ble.base.communication.rsp.ReadHeartRateRsp
-import com.oudmon.ble.base.communication.rsp.BaseRspCmd
-import com.oudmon.ble.base.communication.req.ReadHeartRateReq
-import com.oudmon.ble.base.communication.req.HeartRateSettingReq
-import com.oudmon.ble.base.communication.rsp.HeartRateSettingRsp
-import dev.infa.page3.models.HealthSettings
+import com.oudmon.ble.base.communication.req.*
+import com.oudmon.ble.base.communication.rsp.*
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.Calendar
+import java.text.SimpleDateFormat
+import java.util.*
+
+
+class HealthMetricsCacheManager(context: Context) {
+
+    val prefs: SharedPreferences =
+        context.getSharedPreferences("health_metrics_cache", Context.MODE_PRIVATE)
+    val gson = Gson()
+
+    companion object {
+        private const val CACHE_VALIDITY_MS = 5 * 60 * 1000L // 5 minutes
+        private const val KEY_LAST_SYNC = "last_sync_"
+    }
+
+    // Generic save method
+    fun <T> saveData(metricType: String, offset: Int, data: T) {
+        val key = "${metricType}_$offset"
+        val json = gson.toJson(data)
+        prefs.edit()
+            .putString(key, json)
+            .putLong("${KEY_LAST_SYNC}$key", System.currentTimeMillis())
+            .apply()
+    }
+
+    // Generic get method
+    inline fun <reified T> getData(metricType: String, offset: Int): T? {
+        val key = "${metricType}_$offset"
+        if (!isCacheValid(key)) return null
+
+        val json = prefs.getString(key, null) ?: return null
+        return try {
+            gson.fromJson(json, T::class.java)
+        } catch (e: Exception) {
+            Log.e("Cache", "Failed to parse $metricType: ${e.message}")
+            null
+        }
+    }
+
+    // Check if cache is valid
+    fun isCacheValid(key: String): Boolean {
+        val lastSync = prefs.getLong("${KEY_LAST_SYNC}$key", 0)
+        return System.currentTimeMillis() - lastSync < CACHE_VALIDITY_MS
+    }
+
+    // Clear specific metric cache
+    fun clearMetricCache(metricType: String) {
+        val editor = prefs.edit()
+        prefs.all.keys.filter { it.startsWith(metricType) }.forEach { key ->
+            editor.remove(key)
+            editor.remove("${KEY_LAST_SYNC}$key")
+        }
+        editor.apply()
+    }
+
+    // Clear all cache
+    fun clearAllCache() {
+        prefs.edit().clear().apply()
+    }
+}
 
 class HeartRateViewModel(
-    private val commandHandle: CommandHandle = CommandHandle.getInstance()
-) : ViewModel()
-{
+    private val cacheManager: HealthMetricsCacheManager
+) : ViewModel() {
 
-    // Loading and error states
+    private val _heartRateData = MutableStateFlow<HeartRateData?>(null)
+    val heartRateData: StateFlow<HeartRateData?> = _heartRateData.asStateFlow()
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error.asStateFlow()
-
-    // Today's synced heart rate data
-    private val _todayHeart = MutableStateFlow<HeartRateData?>(null)
-    val todayHeart: StateFlow<HeartRateData?> = _todayHeart.asStateFlow()
-
-    // Live health data placeholder (kept for UI compatibility)
-    private val _liveHealthData = MutableStateFlow(HealthData())
-    val liveHealthData: StateFlow<HealthData> = _liveHealthData.asStateFlow()
-
-    // Heart rate settings managed directly via SDK
-    private val _healthSettings = MutableStateFlow(HealthSettings())
-    val healthSettings: StateFlow<HealthSettings> = _healthSettings.asStateFlow()
-
-    // Measurement states
-    private val _isMeasuring = MutableStateFlow(false)
-    val isMeasuring: StateFlow<Boolean> = _isMeasuring.asStateFlow()
-
-    // Measurement progress (0-100)
-    private val _measurementProgress = MutableStateFlow(0)
-    val measurementProgress: StateFlow<Int> = _measurementProgress.asStateFlow()
-
-    // Latest instant measurement result
-    private val _instantHeartRate = MutableStateFlow<Int?>(null)
-    val instantHeartRate: StateFlow<Int?> = _instantHeartRate.asStateFlow()
-
-    // Measurement timer job
-    private var measurementJob: Job? = null
-
-    // Current heart rate (live from device or latest synced)
-    val currentHeartRate: StateFlow<Int> = combine(
-        _instantHeartRate,
-        _liveHealthData,
-        _todayHeart
-    ) { instant, liveData, todayData ->
-        when {
-            instant != null && instant > 0 -> instant
-            liveData.heartRate > 0 -> liveData.heartRate
-            todayData != null && todayData.heartRateValues.isNotEmpty() ->
-                todayData.heartRateValues.last().heartRate
-            else -> 0
-        }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = 0
-    )
-
-    // Statistics (dynamic from actual data)
-    val averageHeartRate: StateFlow<Int> = _todayHeart
-        .map { data -> data?.averageHeartRate ?: 0 }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
-
-    val minHeartRate: StateFlow<Int> = _todayHeart
-        .map { data -> data?.minHeartRate ?: 0 }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
-
-    val maxHeartRate: StateFlow<Int> = _todayHeart
-        .map { data -> data?.maxHeartRate ?: 0 }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
-
-    // All heart rate readings from today (sorted by time)
-    val allReadings: StateFlow<List<HeartRateEntry>> = _todayHeart
-        .map { data ->
-            (data?.heartRateValues ?: emptyList()).sortedBy { it.timestamp }
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    // Interval readings at fixed 30-min intervals (12:30, 12:00, 11:30, etc.)
-    val intervalReadings: StateFlow<List<HeartRateEntry>> = _todayHeart
-        .map { data ->
-            getFixedIntervalReadings(data?.heartRateValues ?: emptyList())
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    // Monitoring status
-    val isMonitoringEnabled: StateFlow<Boolean> = _healthSettings
-        .map { settings -> settings.heartRateEnabled }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-
-    val monitoringInterval: StateFlow<Int> = _healthSettings
-        .map { settings -> settings.heartRateInterval }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 30)
+    private val _isSyncing = MutableStateFlow(false)
+    val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
     init {
-        setupDataCallbacks()
-        loadInitialData()
+        readHeartRateSettingsInline()
     }
 
-    /**
-     * Get readings at fixed 30-minute intervals (12:30, 12:00, 11:30, etc.)
-     */
-    private fun getFixedIntervalReadings(readings: List<HeartRateEntry>): List<HeartRateEntry> {
-        if (readings.isEmpty()) return emptyList()
-
-        val calendar = Calendar.getInstance()
-        val now = calendar.timeInMillis
-
-        // Get current time rounded down to nearest 30-min mark
-        val currentMinute = calendar.get(Calendar.MINUTE)
-        val roundedMinute = if (currentMinute >= 30) 30 else 0
-        calendar.set(Calendar.MINUTE, roundedMinute)
-        calendar.set(Calendar.SECOND, 0)
-        calendar.set(Calendar.MILLISECOND, 0)
-
-        val intervalReadings = mutableListOf<HeartRateEntry>()
-        var targetTime = calendar.timeInMillis
-
-        // Go back and collect readings at 30-min intervals
-        for (i in 0 until 48) { // Last 24 hours (48 intervals of 30 min)
-            // Find reading closest to this target time (within ±10 minutes)
-            val closest = readings
-                .filter { Math.abs(it.timestamp - targetTime) <= 10 * 60 * 1000 }
-                .minByOrNull { Math.abs(it.timestamp - targetTime) }
-
-            if (closest != null) {
-                intervalReadings.add(closest)
-            }
-
-            // Move back 30 minutes
-            targetTime -= 30 * 60 * 1000
-
-            if (targetTime < readings.first().timestamp) break
-        }
-
-        return intervalReadings.reversed() // Oldest to newest
-    }
-
-    /**
-     * Setup callbacks to receive live data from device
-     */
-    private fun setupDataCallbacks() {
-        // No continuous poll from a core; live health data feed would be wired here if needed
-    }
-
-    /**
-     * Load initial data from device
-     */
-    private fun loadInitialData() {
+    fun measureHeartRateOnce(onResult: (String) -> Unit) {
         viewModelScope.launch {
             try {
-                _isLoading.value = true
-                _error.value = null
-
-                // Load current settings from device (inline)
-                readHeartRateSettingsInline()
-                delay(500)
-
-                // Sync today's data (inline)
-                withContext(Dispatchers.IO) { syncHeartRateDataInline() }
-            } catch (e: Exception) {
-                _error.value = "Failed to load data: ${e.message}"
-            } finally {
-                _isLoading.value = false
-            }
-        }
-    }
-
-    /**
-     * Refresh all data from device
-     */
-    fun refresh() {
-        viewModelScope.launch {
-            try {
-                _isLoading.value = true
-                _error.value = null
-
-                // Refresh settings (inline)
-                readHeartRateSettingsInline()
-                delay(300)
-
-                // Refresh today's synced data (inline)
-                withContext(Dispatchers.IO) { syncHeartRateDataInline() }
-            } catch (e: Exception) {
-                _error.value = "Refresh failed: ${e.message}"
-            } finally {
-                _isLoading.value = false
-            }
-        }
-    }
-
-    /**
-     * Measure heart rate once (instant measurement)
-     * Takes approximately 30 seconds
-     */
-    fun measureHeartRateOnce() {
-        _error.value = null
-        _isMeasuring.value = true
-        _measurementProgress.value = 0
-        _instantHeartRate.value = null
-
-        measurementJob?.cancel()
-        measurementJob = viewModelScope.launch {
-            try {
-                Log.d("HeartRateVM", "Manual measurement started")
-
+                Log.i("HeartRateVM", "Starting manual heart rate measurement...")
                 BleOperateManager.getInstance().manualModeHeart({ result ->
                     val hrValue = result.value.toInt()
                     val errCode = result.errCode.toInt()
-                    Log.d("HeartRateVM", "Manual HR callback: value=$hrValue, err=$errCode")
-
                     if (errCode == 0 && hrValue > 0) {
-                        _instantHeartRate.value = hrValue
-                        _liveHealthData.value = _liveHealthData.value.copy(heartRate = hrValue)
-                        Log.d("HeartRateVM", "Manual HR measured successfully: $hrValue bpm")
+                        Log.i("HeartRateVM", "Manual HR measured: $hrValue bpm")
+                        onResult("Heart Rate: $hrValue bpm")
                     } else {
-                        Log.d("HeartRateVM", "Manual HR measurement failed or invalid")
+                        Log.w("HeartRateVM", "Measurement failed or invalid")
+                        onResult("Measurement failed or invalid")
                     }
                 }, false)
-
-                // Wait up to 30 seconds (typical measurement time)
-                for (i in 1..30) {
-                    delay(1000)
-                    _measurementProgress.value = i * 100 / 30
-                }
-
-                // Stop measurement cleanly
-                BleOperateManager.getInstance().manualModeHeart(null, true)
-                Log.d("HeartRateVM", "Manual measurement stopped")
-
-                // ✅ Do NOT pull todayHeart here — keep manual result visible
-                if (_instantHeartRate.value == null || _instantHeartRate.value == 0) {
-                    _error.value = "No valid heart rate detected"
-                }
             } catch (e: Exception) {
-                _error.value = "Measurement failed: ${e.message}"
-                Log.e("HeartRateVM", "Error during manual measure", e)
-            } finally {
-                _isMeasuring.value = false
-                _measurementProgress.value = 0
-                Log.d("HeartRateVM", "Manual measurement finished")
+                Log.e("HeartRateVM", "Exception: ${e.message}")
+                onResult("Exception: ${e.message}")
             }
         }
     }
 
-
-    /**
-     * Stop current measurement
-     */
-    fun stopMeasurement() {
-        measurementJob?.cancel()
-        _isMeasuring.value = false
-        _measurementProgress.value = 0
-    }
-
-    /**
-     * Toggle continuous heart rate monitoring
-     */
-    fun toggleContinuousMonitoring(enabled: Boolean) {
+    fun syncHeartRateDataForDay(
+        offset: Int,
+        onSuccess: (HeartRateData) -> Unit,
+        onError: (String) -> Unit,
+        forceRefresh: Boolean = false
+    ) {
         viewModelScope.launch {
-            try {
-                _isLoading.value = true
-                _error.value = null
-                val interval = _healthSettings.value.heartRateInterval.takeIf { it > 0 } ?: 30
-                toggleHeartRateInline(enabled, interval)
-                delay(600)
-            } catch (e: Exception) {
-                _error.value = "Failed to toggle monitoring: ${e.message}"
-            } finally {
-                _isLoading.value = false
+            // Try cache first
+            if (!forceRefresh) {
+                cacheManager.getData<HeartRateData>("heart_rate", offset)?.let { cached ->
+                    _heartRateData.value = cached
+                    onSuccess(cached)
+                    Log.d("HeartRateVM", "✅ Using cached HR data for offset $offset")
+                }
+            }
+
+            // Sync from device in background
+            _isSyncing.value = true
+            withContext(Dispatchers.IO) {
+                try {
+                    val baseTime = getCurrentTimeWithTimezone()
+                    val secondsInDay = 24 * 60 * 60
+                    val targetTime = baseTime.toLong() - (offset * secondsInDay)
+
+                    CommandHandle.getInstance().executeReqCmd(
+                        ReadHeartRateReq(targetTime),
+                        object : ICommandResponse<ReadHeartRateRsp> {
+                            override fun onDataResponse(resultEntity: ReadHeartRateRsp) {
+                                if (resultEntity.status == BaseRspCmd.RESULT_OK) {
+                                    val hrData = convertHeartRateData(resultEntity, offset)
+
+                                    // Update UI
+                                    _heartRateData.value = hrData
+                                    onSuccess(hrData)
+
+                                    // Save to cache
+                                    cacheManager.saveData("heart_rate", offset, hrData)
+
+                                    Log.d("HeartRateVM", "✅ Synced HR data for offset $offset")
+                                } else {
+                                    onError("Failed to sync heart rate data")
+                                }
+                                _isSyncing.value = false
+                            }
+                        }
+                    )
+                } catch (e: Exception) {
+                    onError("Exception: ${e.message}")
+                    _isSyncing.value = false
+                }
             }
         }
     }
 
-    /**
-     * Clear instant measurement result
-     */
-    fun clearInstantMeasurement() {
-        _instantHeartRate.value = null
-    }
-
-    /**
-     * Clear error message
-     */
-    fun clearError() {
-        _error.value = null
-    }
-
-    /**
-     * Get heart rate readings for specific time range
-     */
-    fun getReadingsForLastHours(hours: Int): List<HeartRateEntry> {
-        val allValues = _todayHeart.value?.heartRateValues ?: emptyList()
-        if (allValues.isEmpty()) return emptyList()
-
-        val cutoffTime = System.currentTimeMillis() - (hours * 60 * 60 * 1000)
-        return allValues.filter { it.timestamp >= cutoffTime }
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        measurementJob?.cancel()
-    }
-
-    // ================= Inline Data Sync Logic (from DataSynchronization) =================
-
-    private fun syncHeartRateDataInline() {
+    fun toggleHeartRateInline(enabled: Boolean, interval: Int) {
         try {
-            val nowWithTz = getCurrentTimeWithTimezone()
-            commandHandle.executeReqCmd(
-                ReadHeartRateReq(nowWithTz.toLong()),
-                object : ICommandResponse<ReadHeartRateRsp> {
-                    override fun onDataResponse(resultEntity: ReadHeartRateRsp) {
-                        try {
-                            if (resultEntity.status == BaseRspCmd.RESULT_OK) {
-                                val data = convertHeartRateData(resultEntity)
-                                _todayHeart.value = data
-                            } else {
-                                _error.value = "Failed to sync heart rate (status=${resultEntity.status})"
-                            }
-                        } catch (e: Exception) {
-                            _error.value = "HR processing failed: ${e.message}"
+            CommandHandle.getInstance().executeReqCmd(
+                HeartRateSettingReq.getWriteInstance(enabled, interval),
+                object : ICommandResponse<HeartRateSettingRsp> {
+                    override fun onDataResponse(resultEntity: HeartRateSettingRsp) {
+                        if (resultEntity.status == BaseRspCmd.RESULT_OK) {
+                            Log.d("HeartRateVM", "Monitoring ${if (enabled) "enabled" else "disabled"}")
+                        }
+                    }
+                }
+            )
+        } catch (_: Exception) { }
+    }
+
+    private fun readHeartRateSettingsInline() {
+        try {
+            CommandHandle.getInstance().executeReqCmd(
+                HeartRateSettingReq.getReadInstance(),
+                object : ICommandResponse<HeartRateSettingRsp> {
+                    override fun onDataResponse(resultEntity: HeartRateSettingRsp) {
+                        if (resultEntity.status == BaseRspCmd.RESULT_OK) {
+                            Log.i("HeartRateVM", "HR Settings: interval=${resultEntity.heartInterval}, enabled=${resultEntity.isEnable}")
                         }
                     }
                 }
             )
         } catch (e: Exception) {
-            _error.value = "HR sync error: ${e.message}"
+            Log.e("HeartRateVM", "Exception reading HR settings: ${e.message}")
         }
     }
 
-    private fun convertHeartRateData(response: ReadHeartRateRsp): HeartRateData {
+    private fun getCurrentTimeWithTimezone(): Int {
+        return try {
+            val timeZoneHours = TimeZone.getDefault().rawOffset / (1000 * 60 * 60)
+            val currentTimeSeconds = System.currentTimeMillis() / 1000
+            (timeZoneHours * 3600 + currentTimeSeconds).toInt()
+        } catch (e: Exception) {
+            Log.e("HeartRateVM", "Exception getting time: ${e.message}")
+            0
+        }
+    }
+
+    private fun convertHeartRateData(response: ReadHeartRateRsp, offset: Int): HeartRateData {
         val heartRateValues = mutableListOf<HeartRateEntry>()
         response.getmHeartRateArray()?.let { hrArray ->
             for (i in hrArray.indices) {
-                if (hrArray[i].toInt() > 0) {
+                val hr = hrArray[i].toInt()
+                if (hr > 0) {
                     heartRateValues.add(
                         HeartRateEntry(
-                            timestamp = response.getmUtcTime().toLong() + (i * 5 * 60),
-                            heartRate = hrArray[i].toInt(),
+                            timestamp = response.getmUtcTime().toLong() + i * 5 * 60,
+                            heartRate = hr,
                             minuteOfDay = i * 5
                         )
                     )
                 }
             }
         }
+        val avgHR = if (heartRateValues.isNotEmpty())
+            heartRateValues.map { it.heartRate }.average().toInt() else 0
+
         return HeartRateData(
-            date = getDateForOffset(0),
+            date = getDateForOffset(offset),
             heartRateValues = heartRateValues,
-            averageHeartRate = if (heartRateValues.isNotEmpty()) heartRateValues.map { it.heartRate }.average().toInt() else 0,
+            averageHeartRate = avgHR,
             maxHeartRate = heartRateValues.maxOfOrNull { it.heartRate } ?: 0,
             minHeartRate = heartRateValues.minOfOrNull { it.heartRate } ?: 0
         )
     }
 
-    private fun getCurrentTimeWithTimezone(): Int {
-        return try {
-            val timeZone = java.util.TimeZone.getDefault().rawOffset / (1000 * 60 * 60)
-            val currentTime = System.currentTimeMillis() / 1000
-            (timeZone * 3600 + currentTime).toInt()
-        } catch (_: Exception) { 0 }
-    }
-
     private fun getDateForOffset(offset: Int): String {
-        val calendar = java.util.Calendar.getInstance()
-        calendar.add(java.util.Calendar.DAY_OF_YEAR, -offset)
-        val format = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        val calendar = Calendar.getInstance()
+        calendar.add(Calendar.DAY_OF_YEAR, -offset)
+        val format = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         return format.format(calendar.time)
     }
 
-    private fun readHeartRateSettingsInline() {
-        try {
-            commandHandle.executeReqCmd(
-                HeartRateSettingReq.getReadInstance(),
-                object : ICommandResponse<HeartRateSettingRsp> {
-                    override fun onDataResponse(resultEntity: HeartRateSettingRsp) {
-                        if (resultEntity.status == BaseRspCmd.RESULT_OK) {
-                            _healthSettings.value = _healthSettings.value.copy(
-                                heartRateEnabled = resultEntity.isEnable,
-                                heartRateInterval = resultEntity.heartInterval
-                            )
-                        }
-                    }
-                }
-            )
-        } catch (_: Exception) { }
-    }
-
-    private fun toggleHeartRateInline(enabled: Boolean, interval: Int) {
-        try {
-            commandHandle.executeReqCmd(
-                HeartRateSettingReq.getWriteInstance(enabled, interval),
-                object : ICommandResponse<HeartRateSettingRsp> {
-                    override fun onDataResponse(resultEntity: HeartRateSettingRsp) {
-                        if (resultEntity.status == BaseRspCmd.RESULT_OK) {
-                            _healthSettings.value = _healthSettings.value.copy(
-                                heartRateEnabled = enabled,
-                                heartRateInterval = interval
-                            )
-                        }
-                    }
-                }
-            )
-        } catch (_: Exception) { }
+    fun forceRefresh(offset: Int, onSuccess: (HeartRateData) -> Unit, onError: (String) -> Unit) {
+        cacheManager.clearMetricCache("heart_rate")
+        syncHeartRateDataForDay(offset, onSuccess, onError, forceRefresh = true)
     }
 }
+data class HeartRateData(
+    val date: String = "",
+    val heartRateValues: List<HeartRateEntry> = emptyList(),
+    val averageHeartRate: Int = 0,
+    val maxHeartRate: Int = 0,
+    val minHeartRate: Int = 0
+)
+
+data class HeartRateEntry(
+    val timestamp: Long = 0,
+    val heartRate: Int = 0,
+    val minuteOfDay: Int = 0
+)
+
 
 

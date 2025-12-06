@@ -55,14 +55,73 @@ import dev.infa.page3.ui.navigation.Routes
 import dev.infa.page3.ui.theme.Page3Theme
 import dev.infa.page3.viewmodels.ConnectionViewModel
 import dev.infa.page3.viewmodels.HomeViewModel
-import dev.infa.page3.viewmodels.SleepViewModel
-
-import dev.infa.page3.viewmodels.StepViewmodel
+import dev.infa.page3.viewmodels.StepAnalyticsViewModel
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
+@Composable
+fun DeviceInfoScreen(
+    onSleepClick: () -> Unit,
+    onHeartClick:() ->Unit ,
+    onOxyClick:()->Unit,
+    onPressureClick:()->Unit,
+    onHrvClick:()->Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
 
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Battery level display
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = { onSleepClick() },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Get SleepData Level")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = { onHeartClick() },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Get Heart Level")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = { onHrvClick() },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Get Hrv Level")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = { onPressureClick() },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Get Pressure Level")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = { onOxyClick() },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Get Oxygen Level")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Disconnect button
+
+        Spacer(modifier = Modifier.weight(1f))
+    }
+}
 
 @SuppressLint("UnrememberedMutableState", "DefaultLocale")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -71,7 +130,7 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     connectionViewModel: ConnectionViewModel,
     homeViewModel: HomeViewModel,
-    stepViewModel: StepViewmodel,
+    stepViewModel: StepAnalyticsViewModel,
     navController: NavController
 ) {
 
@@ -88,14 +147,22 @@ fun HomeScreen(
                 BottomNavBar(currentNav = currentTab, navController)
             }
         ) { innerPadding ->
-            DashboardScreen(
-                Modifier.padding(innerPadding),
-                connectionViewModel
-                ,homeViewModel,
-                stepViewModel = stepViewModel,
-                navController
-
+            DeviceInfoScreen(
+                onSleepClick = { navController.navigate(Routes.Sleep) },
+                onHeartClick = { navController.navigate(Routes.Heart) },
+                onHrvClick = { navController.navigate(Routes.HRV) },
+                onOxyClick = { navController.navigate(Routes.BloodOxygen) },
+                onPressureClick = { navController.navigate(Routes.BloodPressure) }
             )
+
+//            DashboardScreen(
+//                Modifier.padding(innerPadding),
+//                connectionViewModel
+//                ,homeViewModel,
+//                stepViewModel = stepViewModel,
+//                navController
+//
+//            )
 
 //            val activityCardData = if (displayStepData != null) {
 //                val activityPercentage = ((displayStepData.totalSteps.toFloat() / 5000f) * 100)

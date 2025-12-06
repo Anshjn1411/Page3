@@ -14,7 +14,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.Icon
@@ -27,85 +30,93 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
-@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun DateSelector(
-    selectedDate: LocalDate,
-    onDateChange: (LocalDate) -> Unit
+    selectedDate: Date,
+    onDateChange: (Date) -> Unit
 ) {
-    val today = remember { LocalDate.now() }
-    val yesterday = remember { today.minusDays(1) }
+    val today = remember { Calendar.getInstance() }
+    val isToday = remember(selectedDate) {
+        Calendar.getInstance().apply { time = selectedDate }.get(Calendar.DAY_OF_YEAR) ==
+                today.get(Calendar.DAY_OF_YEAR)
+    }
 
-    fun formatDate(date: LocalDate): String {
-        return when (date) {
-            today -> "Today"
-            yesterday -> "Yesterday"
-            else -> date.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))
+    val formatDate: (Date) -> String = { date ->
+        val cal = Calendar.getInstance().apply { time = date }
+        val todayCal = Calendar.getInstance()
+        val yesterdayCal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
+
+        when {
+            cal.get(Calendar.DAY_OF_YEAR) == todayCal.get(Calendar.DAY_OF_YEAR) -> "Today"
+            cal.get(Calendar.DAY_OF_YEAR) == yesterdayCal.get(Calendar.DAY_OF_YEAR) -> "Yesterday"
+            else -> SimpleDateFormat("MMM dd, yyyy", Locale.US).format(date)
         }
     }
 
-    val isToday = selectedDate == today
-
-    AnimatedVisibility(
-        visible = true,
-        enter = fadeIn() + slideInVertically { -20 }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.Black.copy(alpha = 0.5f))
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        IconButton(onClick = {
+            Calendar.getInstance().apply {
+                time = selectedDate
+                add(Calendar.DAY_OF_YEAR, -1)
+                onDateChange(time)
+            }
+        }) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                contentDescription = "Previous Day",
+                tint = Color.White
+            )
+        }
+
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color.Black.copy(alpha = 0.6f))
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Icon(
+                imageVector = Icons.Default.CalendarToday,
+                contentDescription = null,
+                tint = Color(0xFF00FF88),
+                modifier = Modifier.size(16.dp)
+            )
+            Text(
+                text = formatDate(selectedDate),
+                color = Color.White,
+                fontSize = 16.sp
+            )
+        }
 
-            // ✅ Previous Day
-            IconButton(onClick = {
-                onDateChange(selectedDate.minusDays(1))
-            }) {
-                Icon(
-                    imageVector = Icons.Default.ChevronLeft,
-                    contentDescription = null,
-                    tint = Color.White
-                )
-            }
-
-            // ✅ Center Date
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.CalendarMonth,
-                    contentDescription = null,
-                    tint = Color(0xFF00FF88),
-                    modifier = Modifier.size(16.dp)
-                )
-
-                Spacer(Modifier.width(6.dp))
-
-                Text(
-                    text = formatDate(selectedDate),
-                    color = Color.White,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
-            // ✅ Next Day
-            IconButton(
-                onClick = {
-                    if (!isToday) {
-                        onDateChange(selectedDate.plusDays(1))
+        IconButton(
+            onClick = {
+                if (!isToday) {
+                    Calendar.getInstance().apply {
+                        time = selectedDate
+                        add(Calendar.DAY_OF_YEAR, 1)
+                        onDateChange(time)
                     }
-                },
-                enabled = !isToday
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = if (isToday) Color.Gray else Color.White
-                )
-            }
+                }
+            },
+            enabled = !isToday
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = "Next Day",
+                tint = if (isToday) Color.White.copy(alpha = 0.3f) else Color.White
+            )
         }
     }
 }

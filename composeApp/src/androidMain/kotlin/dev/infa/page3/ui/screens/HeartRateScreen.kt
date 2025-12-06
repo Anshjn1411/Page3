@@ -1,215 +1,215 @@
 package dev.infa.page3.ui.screens
 
-import androidx.compose.foundation.Canvas
+
+import android.content.Context
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.lifecycle.ViewModel
+import dev.infa.page3.ui.components.CommonHealthMetricsScreen
+import dev.infa.page3.ui.components.ContinuousMonitorConfig
+import dev.infa.page3.ui.components.HealthMeasurement
+import dev.infa.page3.ui.components.HealthMetricData
+import dev.infa.page3.ui.navigation.HealthMetricsViewModelFactory
+import dev.infa.page3.viewmodels.BloodOxygenViewModel
+import dev.infa.page3.viewmodels.BloodPressureViewModel
+import dev.infa.page3.viewmodels.HealthMetricsCacheManager
+import dev.infa.page3.viewmodels.HeartRateData
 import dev.infa.page3.viewmodels.HeartRateViewModel
+import dev.infa.page3.viewmodels.HrvViewModel
 import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.util.*
 
 
-@OptIn(ExperimentalMaterial3Api::class)
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun HeartRateScreen(
-    viewModel: HeartRateViewModel,
-    onNavigateBack: () -> Unit
+    onBack: () -> Unit,
+    viewModel: HeartRateViewModel
 ) {
-    // Collect all states
-    val isLoading by viewModel.isLoading.collectAsState()
-    val error by viewModel.error.collectAsState()
-    val isMeasuring by viewModel.isMeasuring.collectAsState()
-    val measurementProgress by viewModel.measurementProgress.collectAsState()
-    val currentHeartRate by viewModel.currentHeartRate.collectAsState()
-    val liveHealthData by viewModel.liveHealthData.collectAsState()
-    val instantHeartRate by viewModel.instantHeartRate.collectAsState()
-    val averageHR by viewModel.averageHeartRate.collectAsState()
-    val minHR by viewModel.minHeartRate.collectAsState()
-    val maxHR by viewModel.maxHeartRate.collectAsState()
-    val allReadings by viewModel.allReadings.collectAsState()
-    val intervalReadings by viewModel.intervalReadings.collectAsState()
-    val isMonitoringEnabled by viewModel.isMonitoringEnabled.collectAsState()
-    val monitoringInterval by viewModel.monitoringInterval.collectAsState()
 
-    Scaffold(
-        topBar = {
-            HealthTopBar(
-                title = "Heart Rate",
-                onNavigateBack = onNavigateBack,
-                onRefresh = { viewModel.refresh() },
-                isLoading = isLoading,
-                isMeasuring = isMeasuring
-            )
-        }
-    ) { padding ->
-        LazyColumn(
+    // State management
+    var selectedDate by remember { mutableStateOf(Date()) }
+    var heartRateData by remember { mutableStateOf<HeartRateData?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // Calculate offset from today for selected date
+    val dateOffset = remember(selectedDate) {
+        val today = Calendar.getInstance()
+        val selected = Calendar.getInstance().apply { time = selectedDate }
+        val diffInMillis = today.timeInMillis - selected.timeInMillis
+        (diffInMillis / (1000 * 60 * 60 * 24)).toInt()
+    }
+
+    // Load heart rate data when date changes
+    LaunchedEffect(dateOffset) {
+        isLoading = true
+        errorMessage = null
+
+        viewModel.syncHeartRateDataForDay(
+            offset = dateOffset,
+            onSuccess = { data ->
+                heartRateData = data
+                isLoading = false
+            },
+            onError = { error ->
+                errorMessage = error
+                isLoading = false
+            }
+        )
+    }
+
+    // Convert HeartRateData to measurements for the chart
+    val measurements = remember(heartRateData) {
+        heartRateData?.heartRateValues?.map { entry ->
+            val time = formatTimestamp(entry.timestamp)
+            val status = when {
+                entry.heartRate < 60 -> "Low"
+                entry.heartRate > 100 -> "High"
+                else -> "Normal"
+            }
+            val color = when {
+                entry.heartRate < 60 -> Color(0xFF3B82F6)
+                entry.heartRate > 100 -> Color(0xFFFF6B6B)
+                else -> Color(0xFF00FF88)
+            }
+            HealthMeasurement(time, entry.heartRate, status, color)
+        } ?: emptyList()
+    }
+
+    // Prepare metric data
+    val metricData = HealthMetricData(
+        title = "Heart Rate",
+        icon = Icons.Default.Favorite,
+        iconColor = Color(0xFF3B82F6),
+        unit = "BPM",
+        average = heartRateData?.averageHeartRate ?: 0,
+        min = heartRateData?.minHeartRate ?: 0,
+        max = heartRateData?.maxHeartRate ?: 0,
+        measurementDurationSeconds = 45
+    )
+
+    // Show loading or error state
+    if (isLoading) {
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .background(Color.Black),
+            contentAlignment = Alignment.Center
         ) {
-            // Current Heart Rate Display
-            item {
-                HealthValueCard(
-                    currentValue = currentHeartRate,
-                    unit = "bpm",
-                    icon = Icons.Default.Favorite,
-                    iconColor = HealthColors.Primary,
-                    valueColor = HealthColors.Primary,
-                    isMeasuring = isMeasuring,
-                    measurementProgress = measurementProgress,
-                    instantValue = instantHeartRate,
-                    liveValue = liveHealthData.heartRate
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator(color = Color(0xFF3B82F6))
+                Spacer(Modifier.height(16.dp))
+                Text("Loading heart rate data...", color = Color.White)
+            }
+        }
+        return
+    }
+
+    if (errorMessage != null) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(32.dp)
+            ) {
+                Icon(
+                    Icons.Default.Error,
+                    contentDescription = null,
+                    tint = Color(0xFFFF6B6B),
+                    modifier = Modifier.size(64.dp)
                 )
-            }
-
-            // Instant Measurement
-            item {
-                InstantMeasurementCard(
-                    title = "Instant Measurement",
-                    subtitle = "Takes ~30 seconds",
-                    isMeasuring = isMeasuring,
-                    measurementProgress = measurementProgress,
-                    isLoading = isLoading,
-                    buttonColor = HealthColors.Primary,
-                    buttonIcon = Icons.Default.Favorite,
-                    onMeasure = { viewModel.measureHeartRateOnce() },
-                    onStop = { viewModel.stopMeasurement() },
-                    onClear = { viewModel.clearInstantMeasurement() },
-                    showClearButton = instantHeartRate != null && instantHeartRate!! > 0
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    errorMessage ?: "Unknown error",
+                    color = Color.White,
+                    textAlign = TextAlign.Center
                 )
-            }
-
-            // Continuous Monitoring
-            item {
-                ContinuousMonitoringCard(
-                    title = "Continuous Monitoring",
-                    subtitle = if (monitoringInterval > 0)
-                        "Every $monitoringInterval minutes" else "Auto monitoring",
-                    intervalMinutes = monitoringInterval,
-                    isEnabled = isMonitoringEnabled,
-                    isLoading = isLoading,
-                    isMeasuring = isMeasuring,
-                    onToggle = { viewModel.toggleContinuousMonitoring(it) }
-                )
-            }
-
-            // Statistics
-            if (averageHR > 0 || minHR > 0 || maxHR > 0) {
-                item {
-                    StatisticsRow(
-                        stats = listOf(
-                            StatItem(
-                                label = "Average",
-                                value = if (averageHR > 0) averageHR.toString() else "--",
-                                icon = Icons.Default.FavoriteBorder,
-                                color = HealthColors.Primary
-                            ),
-                            StatItem(
-                                label = "Minimum",
-                                value = if (minHR > 0) minHR.toString() else "--",
-                                icon = Icons.Default.ArrowDownward,
-                                color = HealthColors.Success
-                            ),
-                            StatItem(
-                                label = "Maximum",
-                                value = if (maxHR > 0) maxHR.toString() else "--",
-                                icon = Icons.Default.ArrowUpward,
-                                color = HealthColors.Danger
-                            )
-                        )
-                    )
-                }
-            }
-
-            // Heart Rate Chart
-            if (intervalReadings.isNotEmpty()) {
-                item {
-                    ChartCard(
-                        title = "30-Minute Intervals",
-                        readingsCount = intervalReadings.size,
-                        readings = intervalReadings,
-                        getValue = { it.heartRate },
-                        chartColor = HealthColors.Primary
-                    )
-                }
-            }
-
-            // All Readings List
-            if (allReadings.isNotEmpty() && allReadings.size > intervalReadings.size) {
-                item {
-                    ReadingsListCard(
-                        title = "Recent Readings",
-                        totalCount = allReadings.size,
-                        readings = allReadings,
-                        maxDisplay = 10,
-                        getTimestamp = { it.timestamp },
-                        getValue = { it.heartRate },
-                        unit = "bpm",
-                        valueColor = HealthColors.Primary,
-                        timeFormat = "HH:mm:ss"
-                    )
-                }
-            }
-
-            // Empty State
-            if (intervalReadings.isEmpty() && !isLoading && !isMeasuring) {
-                item {
-                    EmptyStateCard(
-                        icon = Icons.Default.Favorite,
-                        title = "No heart rate data",
-                        subtitle = "Enable monitoring or measure now"
-                    )
-                }
-            }
-
-            // Loading Indicator
-            if (isLoading) {
-                item {
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = HealthColors.Primary
-                    )
-                }
-            }
-
-            // Error Display
-            error?.let { errorMessage ->
-                item {
-                    ErrorCard(
-                        message = errorMessage,
-                        onDismiss = { viewModel.clearError() }
-                    )
+                Spacer(Modifier.height(24.dp))
+                Button(
+                    onClick = onBack,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6))
+                ) {
+                    Text("Go Back")
                 }
             }
         }
+        return
+    }
+
+    // Main UI with CommonHealthMetricsScreen
+    CommonHealthMetricsScreen(
+        metricData = metricData,
+        measurements = measurements,
+        selectedDate = selectedDate,
+        onDateChange = { newDate ->
+            selectedDate = newDate
+        },
+        onBack = onBack,
+        onMeasureClick = { onResult ->
+            // Trigger manual heart rate measurement
+            viewModel.measureHeartRateOnce { result ->
+                // Parse the result string to get the heart rate value
+                val hrValue = result.replace("Heart Rate: ", "")
+                    .replace(" bpm", "")
+                    .toIntOrNull() ?: 0
+
+                // Return the measured value
+                onResult(hrValue)
+
+                // Optionally refresh data after measurement
+                if (hrValue > 0) {
+                    viewModel.syncHeartRateDataForDay(
+                        offset = dateOffset,
+                        onSuccess = { data ->
+                            heartRateData = data
+                        },
+                        onError = { }
+                    )
+                }
+            }
+        },
+        continuousMonitorConfig = ContinuousMonitorConfig(
+            enabled = true,
+            durations = listOf(10, 20, 30, 60)
+        ),
+        onStartContinuousMonitor = { durationMinutes ->
+            val intervalSeconds = durationMinutes * 60
+            viewModel.toggleHeartRateInline (
+                enabled = true,
+                interval = intervalSeconds
+            )
+        }
+    )
+}
+
+// Helper function to format timestamp
+fun formatTimestamp(timestamp: Long): String {
+    return try {
+        val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
+        val date = Date(timestamp * 1000) // Convert seconds to milliseconds
+        sdf.format(date)
+    } catch (e: Exception) {
+        "Invalid"
     }
 }
+
 

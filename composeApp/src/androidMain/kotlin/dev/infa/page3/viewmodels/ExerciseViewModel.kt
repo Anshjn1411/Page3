@@ -1,101 +1,72 @@
 package dev.infa.page3.viewmodels
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.oudmon.ble.base.bluetooth.BleOperateManager
 import com.oudmon.ble.base.communication.CommandHandle
 import com.oudmon.ble.base.communication.ICommandResponse
 import com.oudmon.ble.base.communication.req.PhoneSportReq
-import com.oudmon.ble.base.communication.sport.SportPlusHandle
 import com.oudmon.ble.base.communication.responseImpl.DeviceSportNotifyListener
 import com.oudmon.ble.base.communication.rsp.AppSportRsp
 import com.oudmon.ble.base.communication.rsp.BaseRspCmd
 import com.oudmon.ble.base.communication.rsp.DeviceNotifyRsp
+import com.oudmon.ble.base.communication.sport.SportPlusHandle
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import dev.infa.page3.data.repository.ExerciseRepository
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.stateIn
+import java.text.SimpleDateFormat
+import java.util.*
 
-data class ExerciseSummary(
-    val sportType: Int,
-    val durationSec: Int,
-    val distanceMeters: Int,
-    val calories: Int,
-    val avgHeartRate: Int,
-    val steps: Int,
-    val startedAtSec: Long
-)
-
-data class LiveExerciseState(
-    val isActive: Boolean = false,
-    val isPaused: Boolean = false,
-    val countdown: Int? = null,
-    val elapsedSec: Int = 0,
-    val heartRate: Int = 0,
-    val steps: Int = 0,
-    val distanceMeters: Int = 0,
-    val calories: Int = 0,
-    val sportType: Int? = null,
-    val error: String? = null
-)
-
-class ExerciseViewModel(
-    private val commandHandle: CommandHandle = CommandHandle.getInstance(),
-    private val repository: ExerciseRepository? = null
-) : ViewModel() {
-
-    private val _liveState = MutableStateFlow(LiveExerciseState())
-    val liveState: StateFlow<LiveExerciseState> = _liveState.asStateFlow()
-
-    private val _recent = MutableStateFlow<List<ExerciseSummary>>(emptyList())
-    val recent: StateFlow<List<ExerciseSummary>> = _recent.asStateFlow()
-
-    // Present a minimal curated list of sport types from docs
-    val availableSportTypes: List<Pair<Int, String>> = allSportTypes()
+class ExerciseViewModel : ViewModel() {
 
     private var tickJob: Job? = null
-    private var lastStartTimestampSec: Long = 0
+    private var lastStartTimestamp: Long = 0
 
-    init {
-        // If repository is present, hydrate from cache; else do nothing
-        repository?.let { repo ->
-            viewModelScope.launch {
-//                repo.recent().collect { list ->
-//                    _recent.value = list.map {
-//                        ExerciseSummary(
-//                            sportType = it.sportType,
-//                            durationSec = it.durationSec,
-//                            distanceMeters = it.distanceMeters,
-//                            calories = it.calories,
-//                            avgHeartRate = it.avgHeartRate,
-//                            steps = it.steps,
-//                            startedAtSec = it.startedAtSec
-//                        )
-//                    }
-//                }
-            }
-        }
-    }
+    // Current exercise tracking
+    var isExercising = false
+        private set
+    var isPaused = false
+        private set
+    var currentSportType: Int? = null
+        private set
+    var elapsedSeconds = 0
+        private set
+    var heartRate = 0
+        private set
+    var steps = 0
+        private set
+    var distanceMeters = 0
+        private set
+    var calories = 0
+        private set
 
+    // Callbacks
+    private var onExerciseUpdate: ((ExerciseData) -> Unit)? = null
+    private var onExerciseEnded: ((ExerciseSummary) -> Unit)? = null
+    private var onError: ((String) -> Unit)? = null
+
+    // Device response handlers
     private val gpsResponse = ICommandResponse<AppSportRsp> { result ->
         result ?: return@ICommandResponse
         when (result.gpsStatus) {
-            6 -> { // start timestamp provided by device
-                lastStartTimestampSec = result.timeStamp.toLong()
+            6 -> { // Start timestamp from device
+                lastStartTimestamp = result.timeStamp.toLong()
+                Log.d("ExerciseVM", "Start timestamp: $lastStartTimestamp")
             }
-            2 -> { // pause
-                _liveState.value = _liveState.value.copy(isPaused = true)
+            2 -> { // Pause
+                isPaused = true
+                notifyUpdate()
+                Log.d("ExerciseVM", "Exercise paused")
             }
-            3 -> { // resume
-                _liveState.value = _liveState.value.copy(isPaused = false)
+            3 -> { // Resume
+                isPaused = false
+                notifyUpdate()
+                Log.d("ExerciseVM", "Exercise resumed")
             }
-            4 -> { // end
-                onExerciseEnded()
+            4 -> { // End
+                handleExerciseEnded()
+                Log.d("ExerciseVM", "Exercise ended")
             }
         }
     }
@@ -106,177 +77,267 @@ class ExerciseViewModel(
             val rsp = resultEntity ?: return
             if (rsp.status != BaseRspCmd.RESULT_OK) return
 
-            // Parse payload indices per docs
             val bytes = rsp.loadData
             if (bytes == null || bytes.isEmpty()) return
 
+            // Parse device data (indices from documentation)
             val sportType = bytes2Int(byteArrayOf(bytes[0]))
             val status = bytes2Int(byteArrayOf(bytes[1]))
             val duration = bytes2Int(byteArrayOf(bytes[2], bytes[3]))
             val heart = bytes2Int(byteArrayOf(bytes[4]))
-            val steps = bytes2Int(byteArrayOf(bytes[5], bytes[6], bytes[7]))
+            val stepCount = bytes2Int(byteArrayOf(bytes[5], bytes[6], bytes[7]))
             val distance = bytes2Int(byteArrayOf(bytes[8], bytes[9], bytes[10]))
             val calorie = bytes2Int(byteArrayOf(bytes[11], bytes[12], bytes[13]))
 
+            // Check device wear status
             if (status == 0x03) {
-                _liveState.value = _liveState.value.copy(error = "Device not worn")
+                onError?.invoke("Device not worn properly")
+                return
             }
 
-            _liveState.value = _liveState.value.copy(
-                sportType = sportType,
-                elapsedSec = duration,
-                heartRate = heart,
-                steps = steps,
-                distanceMeters = distance,
-                calories = calorie
-            )
+            // Update tracking data
+            currentSportType = sportType
+            elapsedSeconds = duration
+            heartRate = heart
+            steps = stepCount
+            distanceMeters = distance
+            calories = calorie
+
+            notifyUpdate()
         }
     }
 
-    fun startExercise(selectedSportType: Int) {
+    // ========================================
+    // PUBLIC API - Start Exercise
+    // ========================================
+
+    fun startExercise(
+        sportType: Int,
+        onUpdate: (ExerciseData) -> Unit,
+        onEnd: (ExerciseSummary) -> Unit,
+        onErrorCallback: (String) -> Unit
+    ) {
+        if (isExercising) {
+            onErrorCallback("Exercise already in progress")
+            return
+        }
+
+        // Set callbacks
+        this.onExerciseUpdate = onUpdate
+        this.onExerciseEnded = onEnd
+        this.onError = onErrorCallback
+
         viewModelScope.launch {
-            startCountdownThenStart(selectedSportType)
+            try {
+                Log.i("ExerciseVM", "Starting exercise: sportType=$sportType")
+
+                // Reset state
+                resetState()
+                currentSportType = sportType
+                isExercising = true
+                isPaused = false
+
+                // Register listener
+                BleOperateManager.getInstance().addSportDeviceListener(0x78, sportNotifyListener)
+
+                // Start exercise on device
+                CommandHandle.getInstance().executeReqCmd(
+                    PhoneSportReq.getSportStatus(1, sportType.toByte()),
+                    gpsResponse
+                )
+
+                // Start local timer
+                startTimer()
+
+                Log.d("ExerciseVM", "Exercise started successfully")
+            } catch (e: Exception) {
+                Log.e("ExerciseVM", "Failed to start exercise: ${e.message}")
+                onError?.invoke("Failed to start: ${e.message}")
+                cleanup()
+            }
         }
     }
 
-    private suspend fun startCountdownThenStart(sportType: Int) {
-        // Countdown 3..1
-        _liveState.value = LiveExerciseState(countdown = 3, sportType = sportType)
-        for (i in 3 downTo 1) {
-            _liveState.value = _liveState.value.copy(countdown = i)
-            delay(1000)
-        }
-        _liveState.value = _liveState.value.copy(countdown = null, isActive = true, isPaused = false)
-
-        BleOperateManager.getInstance().addSportDeviceListener(0x78, sportNotifyListener)
-        commandHandle.executeReqCmd(
-            PhoneSportReq.getSportStatus(1, sportType.toByte()),
-            gpsResponse
-        )
-
-        startTick()
-    }
+    // ========================================
+    // PUBLIC API - Control Exercise
+    // ========================================
 
     fun pauseExercise() {
-        val sportType = _liveState.value.sportType ?: return
-        // Optimistic UI update to pause immediately
-        _liveState.value = _liveState.value.copy(isPaused = true)
-        commandHandle.executeReqCmd(
-            PhoneSportReq.getSportStatus(2, sportType.toByte()),
-            gpsResponse
-        )
+        if (!isExercising || isPaused) return
+
+        val sportType = currentSportType ?: return
+        isPaused = true
+        notifyUpdate()
+
+        try {
+            CommandHandle.getInstance().executeReqCmd(
+                PhoneSportReq.getSportStatus(2, sportType.toByte()),
+                gpsResponse
+            )
+            Log.d("ExerciseVM", "Pause command sent")
+        } catch (e: Exception) {
+            Log.e("ExerciseVM", "Failed to pause: ${e.message}")
+        }
     }
 
     fun resumeExercise() {
-        val sportType = _liveState.value.sportType ?: return
-        // Optimistic UI update to resume immediately
-        _liveState.value = _liveState.value.copy(isPaused = false)
-        commandHandle.executeReqCmd(
-            PhoneSportReq.getSportStatus(3, sportType.toByte()),
-            gpsResponse
-        )
-    }
+        if (!isExercising || !isPaused) return
 
-    fun endExercise(saveIfEligible: Boolean = true) {
-        val sportType = _liveState.value.sportType ?: return
-        // Stop UI immediately while sending SDK end command
-        onExerciseEnded(saveIfEligible)
-        commandHandle.executeReqCmd(
-            PhoneSportReq.getSportStatus(4, sportType.toByte()),
-            gpsResponse
-        )
-        // Pull latest summary from device
-        syncRecentFromDevice()
-    }
+        val sportType = currentSportType ?: return
+        isPaused = false
+        notifyUpdate()
 
-    private fun onExerciseEnded(saveIfEligible: Boolean = true) {
-        BleOperateManager.getInstance().removeSportDeviceListener(0x78)
-        stopTick()
-        val s = _liveState.value
-        if (s.sportType != null && (!saveIfEligible || s.elapsedSec >= 60)) {
-            val started = if (lastStartTimestampSec != 0L) lastStartTimestampSec else (System.currentTimeMillis() / 1000)
-//            val entity = ExerciseEntity(
-//                sportType = s.sportType,
-//                startedAtSec = started,
-//                durationSec = s.elapsedSec,
-//                distanceMeters = s.distanceMeters,
-//                calories = s.calories,
-//                avgHeartRate = s.heartRate,
-//                maxHeartRate = s.heartRate,
-//                steps = s.steps
-//            )
-            if (repository != null) {
-                //viewModelScope.launch { repository.save(entity) }
-            } else {
-//                val summary = ExerciseSummary(
-//                    sportType = entity.sportType,
-//                    durationSec = entity.durationSec,
-//                    distanceMeters = entity.distanceMeters,
-//                    calories = entity.calories,
-//                    avgHeartRate = entity.avgHeartRate,
-//                    steps = entity.steps,
-//                    startedAtSec = entity.startedAtSec
-//                )
-                _recent.value = _recent.value
-            }
-        }
-        _liveState.value = LiveExerciseState()
-    }
-
-    private fun syncRecentFromDevice() {
         try {
-            val syncSport = SportPlusHandle()
-            syncSport.timeFormat = "yyyy-MM-dd HH:mm"
-            syncSport.syncSportPlus { _, t ->
-//                try {
-//                    val type = t?.toString() ?: return@syncSportPlus
-//                    val entity =
-//                    if (repository != null) {
-//                        viewModelScope.launch { repository.save(entity) }
-//                    } else {
-//                        val summary = ExerciseSummary(
-//                            sportType = entity.sportType,
-//                            durationSec = entity.durationSec,
-//                            distanceMeters = entity.distanceMeters,
-//                            calories = entity.calories,
-//                            avgHeartRate = entity.avgHeartRate,
-//                            steps = entity.steps,
-//                            startedAtSec = entity.startedAtSec
-//                        )
-//                        _recent.value = listOf(summary) + _recent.value
-//                    }
-//                } catch (_: Exception) {}
-            }
-            syncSport.cmdSummary(0)
-        } catch (_: Exception) {
-            // Ignore if SDK class not available
+            CommandHandle.getInstance().executeReqCmd(
+                PhoneSportReq.getSportStatus(3, sportType.toByte()),
+                gpsResponse
+            )
+            Log.d("ExerciseVM", "Resume command sent")
+        } catch (e: Exception) {
+            Log.e("ExerciseVM", "Failed to resume: ${e.message}")
         }
     }
 
-    fun endExerciseDontSave() { endExercise(saveIfEligible = false) }
+    fun endExercise() {
+        if (!isExercising) return
 
-    private fun startTick() {
+        val sportType = currentSportType ?: return
+
+        try {
+            CommandHandle.getInstance().executeReqCmd(
+                PhoneSportReq.getSportStatus(4, sportType.toByte()),
+                gpsResponse
+            )
+            Log.d("ExerciseVM", "End command sent")
+
+            // Handle end locally (will also be called from device response)
+            handleExerciseEnded()
+        } catch (e: Exception) {
+            Log.e("ExerciseVM", "Failed to end exercise: ${e.message}")
+            handleExerciseEnded()
+        }
+    }
+
+    // ========================================
+    // PUBLIC API - Get Recent Exercises
+    // ========================================
+
+    fun syncRecentExercises(onSuccess: (List<ExerciseSummary>) -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val syncSport = SportPlusHandle()
+                syncSport.timeFormat = "yyyy-MM-dd HH:mm"
+
+                val summaries = mutableListOf<ExerciseSummary>()
+
+                syncSport.syncSportPlus { _, data ->
+                    try {
+                        // Parse exercise data from device
+                        // This is simplified - adjust based on actual data structure
+                        val summary = parseExerciseData(data)
+                        if (summary != null) {
+                            summaries.add(summary)
+                        }
+                    } catch (e: Exception) {
+                        Log.e("ExerciseVM", "Failed to parse exercise: ${e.message}")
+                    }
+                }
+
+                syncSport.cmdSummary(0)
+
+                // Wait a bit for data to be received
+                delay(2000)
+                onSuccess(summaries)
+
+            } catch (e: Exception) {
+                Log.e("ExerciseVM", "Failed to sync exercises: ${e.message}")
+                onError("Failed to sync: ${e.message}")
+            }
+        }
+    }
+
+    // ========================================
+    // HELPER FUNCTIONS
+    // ========================================
+
+    private fun startTimer() {
         tickJob?.cancel()
         tickJob = viewModelScope.launch {
-            while (true) {
+            while (isExercising) {
                 delay(1000)
-                val st = _liveState.value
-                if (st.isActive && !st.isPaused) {
-                    _liveState.value = st.copy(elapsedSec = st.elapsedSec + 1)
+                if (!isPaused) {
+                    elapsedSeconds++
+                    notifyUpdate()
                 }
             }
         }
     }
 
-    private fun stopTick() {
+    private fun stopTimer() {
         tickJob?.cancel()
         tickJob = null
     }
 
-    override fun onCleared() {
-        super.onCleared()
+    private fun notifyUpdate() {
+        onExerciseUpdate?.invoke(getCurrentExerciseData())
+    }
+
+    private fun getCurrentExerciseData(): ExerciseData {
+        return ExerciseData(
+            sportType = currentSportType ?: 0,
+            isActive = isExercising,
+            isPaused = isPaused,
+            elapsedSeconds = elapsedSeconds,
+            heartRate = heartRate,
+            steps = steps,
+            distanceMeters = distanceMeters,
+            calories = calories
+        )
+    }
+
+    private fun handleExerciseEnded() {
+        val startTime = if (lastStartTimestamp > 0)
+            lastStartTimestamp
+        else
+            System.currentTimeMillis() / 1000
+
+        val summary = ExerciseSummary(
+            sportType = currentSportType ?: 0,
+            sportName = getSportName(currentSportType ?: 0),
+            startTimestamp = startTime,
+            durationSeconds = elapsedSeconds,
+            distanceMeters = distanceMeters,
+            calories = calories,
+            averageHeartRate = heartRate,
+            steps = steps,
+            date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                .format(Date(startTime * 1000))
+        )
+
+        onExerciseEnded?.invoke(summary)
+        cleanup()
+    }
+
+    private fun cleanup() {
         BleOperateManager.getInstance().removeSportDeviceListener(0x78)
-        stopTick()
+        stopTimer()
+        resetState()
+
+        onExerciseUpdate = null
+        onExerciseEnded = null
+        onError = null
+    }
+
+    private fun resetState() {
+        isExercising = false
+        isPaused = false
+        currentSportType = null
+        elapsedSeconds = 0
+        heartRate = 0
+        steps = 0
+        distanceMeters = 0
+        calories = 0
+        lastStartTimestamp = 0
     }
 
     private fun bytes2Int(data: ByteArray): Int {
@@ -287,182 +348,118 @@ class ExerciseViewModel(
         return res
     }
 
-    // Full sport type mapping from docs (major set); unknown fallbacks
-    private fun allSportTypes(): List<Pair<Int, String>> {
-        val map = linkedMapOf(
-            1 to "GPS Run",
-            2 to "GPS Bike",
-            3 to "GPS Walk",
-            4 to "Walking",
-            5 to "Rope Skipping",
-            6 to "Swimming",
-            7 to "Running (Outdoor)",
-            8 to "Hiking",
-            9 to "Cycling",
-            10 to "Exercise (Others)",
-            11 to "Swing",
-            20 to "Climb",
-            21 to "Badminton",
-            22 to "Yoga",
-            23 to "Aerobics",
-            24 to "Spinning Bike",
-            25 to "Kayaking",
-            26 to "Elliptical",
-            27 to "Rowing Machine",
-            28 to "Table Tennis",
-            29 to "Tennis",
-            30 to "Golf",
-            31 to "Basketball",
-            32 to "Football",
-            33 to "Volleyball",
-            34 to "Rock Climbing",
-            35 to "Dance",
-            36 to "Roller Skating",
-            40 to "Treadmill",
-            41 to "Indoor Walking",
-            42 to "Trail Running",
-            43 to "Race Walk",
-            44 to "Playground Running",
-            45 to "Fat Loss Running",
-            50 to "Outdoor Cycling",
-            51 to "Indoor Cycling",
-            52 to "Mountain Biking",
-            53 to "BMX",
-            55 to "Swimming Pool",
-            56 to "Outdoor Swimming",
-            57 to "Fin Swimming",
-            58 to "Synchronized Swimming",
-            60 to "Outdoor Hiking",
-            61 to "Orienteering",
-            62 to "Fishing",
-            63 to "Hunting",
-            64 to "Skateboard",
-            65 to "Parkour",
-            66 to "ATV",
-            67 to "Motocross",
-            68 to "Racing",
-            69 to "Hand Bike",
-            70 to "Marathon",
-            71 to "Obstacle Course",
-            80 to "Stair Climber",
-            81 to "Stair Stepper",
-            82 to "Mixed Aerobic",
-            83 to "Kickboxing",
-            84 to "Core Training",
-            85 to "Cross Training",
-            86 to "Indoor Fitness",
-            87 to "Group Gymnastics",
-            88 to "Strength Training",
-            89 to "Gap Training",
-            90 to "Free Training",
-            91 to "Flexibility Training",
-            92 to "Gymnastics",
-            93 to "Stretching",
-            94 to "Pilates",
-            95 to "Horizontal Bar",
-            96 to "Parallel Bars",
-            97 to "Battle Rope",
-            98 to "Fitness",
-            99 to "Balance Training",
-            100 to "Step Training",
-            110 to "Square Dance",
-            111 to "Ballroom Dancing",
-            112 to "Belly Dance",
-            113 to "Ballet",
-            114 to "Street Dance",
-            115 to "Zumba",
-            116 to "Latin Dance",
-            117 to "Latin Jazz",
-            118 to "Hip-Hop Dance",
-            119 to "Pole Dancing",
-            120 to "Break Dance",
-            121 to "Folk Dance",
-            122 to "New Dance",
-            123 to "Modern Dance",
-            124 to "Disco",
-            125 to "Tap Dance",
-            126 to "Other Dance",
-            130 to "Boxing",
-            131 to "Wrestling",
-            132 to "Martial Arts",
-            133 to "Tai Chi",
-            134 to "Muay Thai",
-            135 to "Judo",
-            136 to "Taekwondo",
-            137 to "Karate",
-            138 to "Free Sparring",
-            139 to "Swordsmanship",
-            140 to "Jiu-Jitsu",
-            141 to "Fencing",
-            142 to "Kendo",
-            150 to "Beach Football",
-            151 to "Beach Volleyball",
-            152 to "Baseball",
-            153 to "Softball",
-            154 to "Rugby",
-            155 to "Hockey",
-            156 to "Squash",
-            157 to "Gateball",
-            158 to "Cricket",
-            159 to "Handball",
-            160 to "Bowling",
-            161 to "Polo",
-            162 to "Racquetball",
-            163 to "Billiards",
-            164 to "Sepak Takraw",
-            165 to "Dodgeball",
-            166 to "Water Polo",
-            167 to "Ice Hockey",
-            168 to "Shuttlecock",
-            169 to "Indoor Soccer",
-            170 to "Sandbag Ball",
-            171 to "Floor Bocce",
-            172 to "Jai Alai",
-            173 to "Floorball",
-            174 to "Australian Rules Football",
-            175 to "Pickleball",
-            180 to "Outdoor Rowing",
-            181 to "Sailing",
-            182 to "Dragon Boat",
-            183 to "Surfing",
-            184 to "Kitesurfing",
-            185 to "Paddling",
-            186 to "Paddleboard",
-            187 to "Indoor Surfing",
-            188 to "Rafting",
-            189 to "Snorkeling",
-            190 to "Skiing",
-            191 to "Snowboard",
-            192 to "Alpine Skiing",
-            193 to "Cross-Country Skiing",
-            194 to "Ski Orienteering",
-            195 to "Biathlon",
-            196 to "Outdoor Skating",
-            197 to "Indoor Skating",
-            198 to "Curling",
-            199 to "Bobsleigh",
-            200 to "Sled",
-            201 to "Snowmobile",
-            202 to "Snowshoe Hiking",
-            210 to "Hula Hoop",
-            211 to "Frisbee",
-            212 to "Darts",
-            213 to "Kite Flying",
-            214 to "Tug of War",
-            215 to "Esports",
-            216 to "Walking Machine",
-            217 to "Swing (New)",
-            218 to "Shuffleboard",
-            219 to "Table Football",
-            220 to "Somatosensory Game",
-            221 to "Bungee Jumping",
-            222 to "Skydiving",
-            223 to "Anusara",
-            224 to "Yin Yoga",
-            225 to "Pregnancy Yoga"
-        )
-        return map.entries.map { it.toPair() }
+    private fun parseExerciseData(data: Any?): ExerciseSummary? {
+        // Implement based on your actual data structure
+        // This is a placeholder
+        return null
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        cleanup()
+        Log.d("ExerciseVM", "ViewModel cleared")
     }
 }
 
+data class ExerciseData(
+    val sportType: Int,
+    val isActive: Boolean,
+    val isPaused: Boolean,
+    val elapsedSeconds: Int,
+    val heartRate: Int,
+    val steps: Int,
+    val distanceMeters: Int,
+    val calories: Int
+) {
+    fun getFormattedDuration(): String {
+        val hours = elapsedSeconds / 3600
+        val minutes = (elapsedSeconds % 3600) / 60
+        val seconds = elapsedSeconds % 60
+        return String.format("%02d:%02d:%02d", hours, minutes, seconds)
+    }
 
+    fun getFormattedDistance(): String {
+        return if (distanceMeters >= 1000) {
+            String.format("%.2f km", distanceMeters / 1000.0)
+        } else {
+            "$distanceMeters m"
+        }
+    }
+}
+
+data class ExerciseSummary(
+    val sportType: Int,
+    val sportName: String,
+    val startTimestamp: Long,
+    val durationSeconds: Int,
+    val distanceMeters: Int,
+    val calories: Int,
+    val averageHeartRate: Int,
+    val steps: Int,
+    val date: String
+) {
+    fun getFormattedDuration(): String {
+        val hours = durationSeconds / 3600
+        val minutes = (durationSeconds % 3600) / 60
+        return if (hours > 0) {
+            "$hours hr $minutes min"
+        } else {
+            "$minutes min"
+        }
+    }
+
+    fun getFormattedDistance(): String {
+        return if (distanceMeters >= 1000) {
+            String.format("%.2f km", distanceMeters / 1000.0)
+        } else {
+            "$distanceMeters m"
+        }
+    }
+}
+fun getSportName(sportType: Int): String {
+    return when (sportType) {
+        1 -> "GPS Run"
+        2 -> "GPS Bike"
+        3 -> "GPS Walk"
+        4 -> "Walking"
+        5 -> "Rope Skipping"
+        6 -> "Swimming"
+        7 -> "Running"
+        8 -> "Hiking"
+        9 -> "Cycling"
+        10 -> "Exercise"
+        20 -> "Climb"
+        21 -> "Badminton"
+        22 -> "Yoga"
+        23 -> "Aerobics"
+        24 -> "Spinning"
+        31 -> "Basketball"
+        32 -> "Football"
+        33 -> "Volleyball"
+        40 -> "Treadmill"
+        50 -> "Outdoor Cycling"
+        55 -> "Swimming Pool"
+        80 -> "Stair Climber"
+        88 -> "Strength Training"
+        110 -> "Square Dance"
+        130 -> "Boxing"
+        150 -> "Beach Football"
+        160 -> "Bowling"
+        else -> "Sport $sportType"
+    }
+}
+
+fun getPopularSportTypes(): List<Pair<Int, String>> {
+    return listOf(
+        1 to "Running",
+        2 to "Cycling",
+        3 to "Walking",
+        4 to "Hiking",
+        5 to "Rope Skipping",
+        6 to "Swimming",
+        22 to "Yoga",
+        31 to "Basketball",
+        32 to "Football",
+        88 to "Strength Training"
+    )
+}

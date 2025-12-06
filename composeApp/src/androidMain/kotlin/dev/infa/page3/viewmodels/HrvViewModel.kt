@@ -1,414 +1,267 @@
 package dev.infa.page3.viewmodels
 
+
+
+import android.os.Build
 import android.util.Log
+import androidx.annotation.RequiresApi
+import androidx.compose.animation.core.EaseOut
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Air
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.GpsFixed
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.MonitorHeart
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.oudmon.ble.base.bean.SleepDisplay
+import com.oudmon.ble.base.communication.rsp.SleepNewProtoResp
+
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextAlign
+
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.*
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.oudmon.ble.base.bluetooth.BleOperateManager
-import dev.infa.page3.models.HealthData
 import com.oudmon.ble.base.communication.CommandHandle
 import com.oudmon.ble.base.communication.ICommandResponse
+import com.oudmon.ble.base.communication.LargeDataHandler
+import com.oudmon.ble.base.communication.bigData.BloodOxygenEntity
+import com.oudmon.ble.base.communication.req.BloodOxygenSettingReq
+import com.oudmon.ble.base.communication.req.BpSettingReq
 import com.oudmon.ble.base.communication.req.HRVReq
 import com.oudmon.ble.base.communication.req.HrvSettingReq
+import com.oudmon.ble.base.communication.req.ReadPressureReq
+import com.oudmon.ble.base.communication.rsp.BaseRspCmd
+import com.oudmon.ble.base.communication.rsp.BloodOxygenSettingRsp
+import com.oudmon.ble.base.communication.rsp.BpSettingRsp
 import com.oudmon.ble.base.communication.rsp.HRVRsp
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
+import com.oudmon.ble.base.communication.rsp.ReadBlePressureRsp
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
 import java.util.*
 
+
 class HrvViewModel(
-    private val commandHandle: CommandHandle = CommandHandle.getInstance()
+    private val cacheManager: HealthMetricsCacheManager
 ) : ViewModel()
 {
 
-    companion object {
-        private const val TAG = "HrvViewModel"
-        private const val MEASUREMENT_DURATION_MS = 30000L
-        private const val INTERVAL_MINUTES = 30
-    }
+    private val _hrvData = MutableStateFlow<HrvData?>(null)
+    val hrvData: StateFlow<HrvData?> = _hrvData.asStateFlow()
 
-    // UI State
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading = _isLoading.asStateFlow()
+    private val _isSyncing = MutableStateFlow(false)
+    val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
-    private val _error = MutableStateFlow<String?>(null)
-    val error = _error.asStateFlow()
-
-    private val _isMeasuring = MutableStateFlow(false)
-    val isMeasuring = _isMeasuring.asStateFlow()
-
-    private val _measurementProgress = MutableStateFlow(0)
-    val measurementProgress = _measurementProgress.asStateFlow()
-
-    private val _instantHrv = MutableStateFlow<Int?>(null)
-    val instantHrv = _instantHrv.asStateFlow()
-
-    // Data State
-    private val _readings = MutableStateFlow<List<HrvReading>>(emptyList())
-    val allReadings = _readings.asStateFlow()
-
-    private val _isMonitoringEnabled = MutableStateFlow(false)
-    val isMonitoringEnabled = _isMonitoringEnabled.asStateFlow()
-
-    private var measurementJob: Job? = null
-
-    // Computed Properties
-    val currentHrv: StateFlow<Int> = combine(
-        _instantHrv,
-        _readings,
-        _isMeasuring
-    ) { instant, readings, measuring ->
-        when {
-            // If measuring, show instant value (even if 0) or 0
-            measuring -> instant ?: 0
-            // If we have a fresh instant measurement, show it
-            instant != null && instant > 0 -> instant
-            // Otherwise show latest valid reading
-            readings.isNotEmpty() -> {
-                readings.filter { it.value > 0 }
-                    .maxByOrNull { it.timestamp }?.value ?: 0
-            }
-            else -> 0
-        }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
-    val averageHrv: StateFlow<Int> = _readings.map { readings ->
-        calculateAverage(readings.filter { it.value > 0 })
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
-
-    val minHrv: StateFlow<Int> = _readings.map { readings ->
-        readings.filter { it.value > 0 }.minOfOrNull { it.value } ?: 0
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
-
-    val maxHrv: StateFlow<Int> = _readings.map { readings ->
-        readings.filter { it.value > 0 }.maxOfOrNull { it.value } ?: 0
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
-
-    val intervalReadings: StateFlow<List<HrvReading>> = _readings.map { readings ->
-        getFixedIntervalReadings(readings)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    init {
-        Log.d(TAG, "Initializing HrvViewModel")
-        refresh()
-    }
-
-    fun refresh(offset: Int = 0) {
-        Log.d(TAG, "Refreshing HRV data with offset=$offset")
+    fun measureHrvOnce(onResult: (String) -> Unit) {
         viewModelScope.launch {
             try {
-                _isLoading.value = true
-                _error.value = null
-                withContext(Dispatchers.IO) {
-                    syncHrvData(offset)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error refreshing data", e)
-                _error.value = "Failed to load data: ${e.message}"
-            } finally {
-                _isLoading.value = false
-            }
-        }
-    }
-
-    // Fixed measureHrvOnce() - Pattern from working heart rate implementation
-    fun measureHrvOnce() {
-        Log.d(TAG, "Starting HRV manual measurement (single reading)")
-        measurementJob?.cancel()
-        measurementJob = viewModelScope.launch {
-            try {
-                _isMeasuring.value = true
-                _measurementProgress.value = 0
-                _error.value = null
-                _instantHrv.value = null
-
-                var measurementComplete = false
-
-                // Start manual HRV measurement
-                Log.d(TAG, "Initiating BLE HRV measurement...")
+                Log.i("HrvVM", "Starting manual HRV measurement...")
                 BleOperateManager.getInstance().manualModeHrv({ result ->
                     val hrvValue = result.value
-                    Log.d(TAG, "HRV reading received: $hrvValue ms")
-
-                    // Only process valid readings
-                    if (hrvValue > 0 && !measurementComplete) {
-                        measurementComplete = true
-                        viewModelScope.launch {
-                            _instantHrv.value = hrvValue
-                            _measurementProgress.value = 100
-                            delay(500) // Show complete state briefly
-                            _isMeasuring.value = false
-                            syncHrvData(0)
-                        }
+                    val errCode = result.errCode.toInt()
+                    if (errCode == 0 && hrvValue > 0) {
+                        Log.i("HrvVM", "Manual HRV measured: $hrvValue ms")
+                        onResult("HRV: $hrvValue ms")
+                    } else {
+                        onResult("Measurement failed or invalid")
                     }
                 }, false)
-
-                // Simulate measurement progress (runs independently of callback)
-                val startTime = System.currentTimeMillis()
-                var lastProgress = 0
-
-                while (isActive && !measurementComplete) {
-                    val elapsed = System.currentTimeMillis() - startTime
-                    val progress = ((elapsed * 100) / MEASUREMENT_DURATION_MS).toInt().coerceAtMost(99)
-
-                    // Only update if progress changed
-                    if (progress != lastProgress) {
-                        _measurementProgress.value = progress
-                        lastProgress = progress
-                    }
-
-                    delay(300)
-
-                    // Timeout after 30 seconds
-                    if (elapsed >= MEASUREMENT_DURATION_MS) {
-                        Log.w(TAG, "Measurement timeout reached")
-                        if (!measurementComplete) {
-                            _error.value = "Measurement timeout - please try again"
-                            _isMeasuring.value = false
-                            _measurementProgress.value = 0
-                        }
-                        break
-                    }
-                }
-
-                Log.d(TAG, "HRV measurement loop finished")
-
             } catch (e: Exception) {
-                Log.e(TAG, "Error during HRV measurement", e)
-                _error.value = "Measurement failed: ${e.message}"
-                _isMeasuring.value = false
-                _measurementProgress.value = 0
+                onResult("Exception: ${e.message}")
             }
         }
     }
 
-
-
-    // Alternative approach - if the above doesn't work, try this simpler version:
-    fun measureHrvOnceSimple() {
-        Log.d(TAG, "Starting HRV manual measurement (single reading)")
-        measurementJob?.cancel()
-
-        _isMeasuring.value = true
-        _measurementProgress.value = 0
-        _error.value = null
-        _instantHrv.value = null
-
-        measurementJob = viewModelScope.launch {
-            try {
-                // Progress animation loop
-                val startTime = System.currentTimeMillis()
-
-                launch {
-                    while (isActive && _isMeasuring.value) {
-                        val elapsed = System.currentTimeMillis() - startTime
-                        val progress = ((elapsed * 100) / MEASUREMENT_DURATION_MS).toInt().coerceAtMost(99)
-                        _measurementProgress.value = progress
-                        delay(300)
-                    }
+    fun syncHrvDataForDay(
+        offset: Int,
+        onSuccess: (HrvData) -> Unit,
+        onError: (String) -> Unit,
+        forceRefresh: Boolean = false
+    ) {
+        viewModelScope.launch {
+            if (!forceRefresh) {
+                cacheManager.getData<HrvData>("hrv", offset)?.let { cached ->
+                    _hrvData.value = cached
+                    onSuccess(cached)
+                    Log.d("HrvVM", "✅ Using cached HRV data for offset $offset")
                 }
+            }
 
-                // Start BLE measurement
-                withContext(Dispatchers.IO) {
-                    BleOperateManager.getInstance().manualModeHrv({ result ->
-                        val hrvValue = result.value
-                        Log.d(TAG, "HRV reading received: $hrvValue ms")
-
-                        if (hrvValue > 0) {
-                            viewModelScope.launch {
-                                _instantHrv.value = hrvValue
-                                _measurementProgress.value = 100
-                                delay(500)
-                                _isMeasuring.value = false
-                                syncHrvData(0)
+            _isSyncing.value = true
+            withContext(Dispatchers.IO) {
+                try {
+                    CommandHandle.getInstance().executeReqCmd(
+                        HRVReq(offset.toByte()),
+                        object : ICommandResponse<HRVRsp> {
+                            override fun onDataResponse(resultEntity: HRVRsp) {
+                                if (resultEntity.range > 0) {
+                                    val hrvData = convertHrvData(resultEntity, offset)
+                                    _hrvData.value = hrvData
+                                    onSuccess(hrvData)
+                                    cacheManager.saveData("hrv", offset, hrvData)
+                                    Log.d("HrvVM", "✅ Synced HRV data for offset $offset")
+                                } else {
+                                    onError("Failed to sync HRV data")
+                                }
+                                _isSyncing.value = false
                             }
                         }
-                    }, false)
-
-                    // Wait for measurement or timeout
-                    delay(MEASUREMENT_DURATION_MS)
-                    if (_isMeasuring.value) {
-                        _error.value = "Measurement timeout"
-                        _isMeasuring.value = false
-                        _measurementProgress.value = 0
-                    }
+                    )
+                } catch (e: Exception) {
+                    onError("Exception: ${e.message}")
+                    _isSyncing.value = false
                 }
-
-            } catch (e: Exception) {
-                Log.e(TAG, "Error during HRV measurement", e)
-                _error.value = "Measurement failed: ${e.message}"
-                _isMeasuring.value = false
-                _measurementProgress.value = 0
             }
         }
     }
 
-
-    fun stopMeasurement() {
-        Log.d(TAG, "Stopping measurement")
-        measurementJob?.cancel()
-        _isMeasuring.value = false
-        _measurementProgress.value = 0
-    }
-
-    fun toggleContinuousMonitoring(enabled: Boolean) {
-        Log.d(TAG, "Toggling continuous monitoring: $enabled")
-        viewModelScope.launch {
-            try {
-                _isLoading.value = true
-                _error.value = null
-
-                withContext(Dispatchers.IO) {
-                    toggleHrvMonitoring(enabled)
-                }
-
-                _isMonitoringEnabled.value = enabled
-                Log.d(TAG, "Continuous monitoring ${if (enabled) "enabled" else "disabled"}")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error toggling monitoring", e)
-                _error.value = "Failed to toggle monitoring: ${e.message}"
-            } finally {
-                _isLoading.value = false
-            }
-        }
-    }
-
-    // Private helper functions
-    private fun syncHrvData(offset: Int) {
-        Log.d(TAG, "Syncing HRV data with offset=$offset")
+    fun toggleHrvMonitoring(enabled: Boolean, onComplete: () -> Unit) {
         try {
-            commandHandle.executeReqCmd(
-                HRVReq(offset.toByte()),
-                object : ICommandResponse<HRVRsp> {
-                    override fun onDataResponse(resultEntity: HRVRsp) {
-                        Log.d(TAG, "Received HRV response: range=${resultEntity.range}, dataSize=${resultEntity.hrvArray?.size}")
-                        try {
-                            val newReadings = parseHrvResponse(resultEntity)
-                            Log.d(TAG, "Parsed ${newReadings.size} readings (${newReadings.count { it.value > 0 }} valid)")
-
-                            // Merge with existing readings and remove duplicates
-                            val allReadings = (_readings.value + newReadings)
-                                .distinctBy { it.timestamp }
-                                .sortedBy { it.timestamp }
-
-                            _readings.value = allReadings
-                            Log.d(TAG, "Total readings: ${allReadings.size} (${allReadings.count { it.value > 0 }} valid)")
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error parsing HRV response", e)
-                        }
-                    }
-                }
-            )
+            CommandHandle.getInstance().executeReqCmd(HrvSettingReq(enabled), null)
+            Log.d("HrvVM", "HRV monitoring ${if (enabled) "enabled" else "disabled"}")
+            onComplete()
         } catch (e: Exception) {
-            Log.e(TAG, "Error executing HRV command", e)
-            throw e
+            Log.e("HrvVM", "Exception: ${e.message}")
         }
     }
 
-    private fun toggleHrvMonitoring(enabled: Boolean) {
-        try {
-            commandHandle.executeReqCmd(
-                HrvSettingReq(enabled),
-                null
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "Error toggling HRV monitoring", e)
-            throw e
-        }
-    }
-
-    private fun parseHrvResponse(response: HRVRsp): List<HrvReading> {
+    private fun convertHrvData(response: HRVRsp, offset: Int): HrvData {
+        val hrvValues = mutableListOf<HrvEntry>()
         val calendar = Calendar.getInstance()
-
-        // Parse date from response or use current date
-        try {
-            if (response.today != null) {
-                val year = response.today.year
-                val month = response.today.month
-                val day = response.today.day
-
-                // Validate date values
-                if (year in 2020..2030 && month in 1..12 && day in 1..31) {
-                    calendar.set(year, month - 1, day, 0, 0, 0)
-                    calendar.set(Calendar.MILLISECOND, 0)
-                } else {
-                    Log.w(TAG, "Invalid date from device: $year-$month-$day, using current date")
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error parsing date", e)
-        }
-
-        val baseTimestamp = calendar.timeInMillis
-        val intervalMs = (response.range.coerceAtLeast(1)) * 60L * 1000L
-
-        // Parse HRV values - FIX: Don't divide by 10, use raw values
-        val hrvValues = (response.hrvArray ?: byteArrayOf()).map { byte ->
-            (byte.toInt() and 0xFF) // Remove the division by 10
-        }
-
-        Log.d(TAG, "Base time: ${calendar.time}, Interval: ${response.range} min, Values: $hrvValues")
-
-        return hrvValues.mapIndexed { index, value ->
-            HrvReading(
-                timestamp = baseTimestamp + (index * intervalMs),
-                value = value
-            )
-        }
-    }
-
-    private fun getFixedIntervalReadings(readings: List<HrvReading>): List<HrvReading> {
-        if (readings.isEmpty()) return emptyList()
-
-        val validReadings = readings
-            .filter { it.value > 0 }
-            .sortedBy { it.timestamp }
-
-        if (validReadings.isEmpty()) return emptyList()
-
-        val result = mutableListOf<HrvReading>()
-        val calendar = Calendar.getInstance()
-
-        // Round to nearest 30-minute mark
-        val currentMinute = calendar.get(Calendar.MINUTE)
-        val roundedMinute = if (currentMinute >= 30) 30 else 0
-        calendar.set(Calendar.MINUTE, roundedMinute)
+        calendar.add(Calendar.DAY_OF_YEAR, -offset)
+        calendar.set(Calendar.HOUR_OF_DAY, 0)
+        calendar.set(Calendar.MINUTE, 0)
         calendar.set(Calendar.SECOND, 0)
         calendar.set(Calendar.MILLISECOND, 0)
+        val baseTimestamp = calendar.timeInMillis / 1000
 
-        var targetTime = calendar.timeInMillis
-        val intervalMs = INTERVAL_MINUTES * 60 * 1000L
-        val toleranceMs = 10 * 60 * 1000L // 10 minutes tolerance
-
-        // Go back 48 intervals (24 hours)
-        repeat(48) {
-            val matchingReading = validReadings
-                .filter { kotlin.math.abs(it.timestamp - targetTime) <= toleranceMs }
-                .minByOrNull { kotlin.math.abs(it.timestamp - targetTime) }
-
-            if (matchingReading != null) {
-                result.add(matchingReading)
+        response.hrvArray?.let { hrvArray ->
+            val intervalMinutes = response.range.coerceAtLeast(1)
+            for (i in hrvArray.indices) {
+                val hrvValue = (hrvArray[i].toInt() and 0xFF)
+                if (hrvValue > 0) {
+                    hrvValues.add(
+                        HrvEntry(
+                            timestamp = baseTimestamp + (i * intervalMinutes * 60),
+                            hrvValue = hrvValue,
+                            minuteOfDay = i * intervalMinutes
+                        )
+                    )
+                }
             }
-
-            targetTime -= intervalMs
-
-            // Stop if we've gone before the first reading
-            if (targetTime < validReadings.first().timestamp) return@repeat
         }
 
-        return result.reversed()
+        val avgHrv = if (hrvValues.isNotEmpty())
+            hrvValues.map { it.hrvValue }.average().toInt() else 0
+
+        return HrvData(
+            date = getDateForOffset(offset),
+            hrvValues = hrvValues,
+            averageHrv = avgHrv,
+            maxHrv = hrvValues.maxOfOrNull { it.hrvValue } ?: 0,
+            minHrv = hrvValues.minOfOrNull { it.hrvValue } ?: 0
+        )
     }
 
-    private fun calculateAverage(readings: List<HrvReading>): Int {
-        if (readings.isEmpty()) return 0
-        return readings.map { it.value }.average().toInt()
+    private fun getDateForOffset(offset: Int): String {
+        val calendar = Calendar.getInstance()
+        calendar.add(Calendar.DAY_OF_YEAR, -offset)
+        return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(calendar.time)
     }
 
-    data class HrvReading(
-        val timestamp: Long,
-        val value: Int
-    )
-
-    override fun onCleared() {
-        super.onCleared()
-        measurementJob?.cancel()
-        Log.d(TAG, "ViewModel cleared")
+    fun forceRefresh(offset: Int, onSuccess: (HrvData) -> Unit, onError: (String) -> Unit) {
+        cacheManager.clearMetricCache("hrv")
+        syncHrvDataForDay(offset, onSuccess, onError, forceRefresh = true)
     }
 }
+
+// ========================================
+// DATA CLASSES
+// ========================================
+
+data class HrvData(
+    val date: String = "",
+    val hrvValues: List<HrvEntry> = emptyList(),
+    val averageHrv: Int = 0,
+    val maxHrv: Int = 0,
+    val minHrv: Int = 0
+) {
+    fun getFormattedAverageHrv(): String {
+        return "$averageHrv ms"
+    }
+
+    fun getHrvStatus(): String {
+        return when {
+            averageHrv < 30 -> "Low"
+            averageHrv < 60 -> "Normal"
+            else -> "Good"
+        }
+    }
+}
+
+data class HrvEntry(
+    val timestamp: Long = 0,
+    val hrvValue: Int = 0,
+    val minuteOfDay: Int = 0
+)
+

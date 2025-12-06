@@ -1,3 +1,4 @@
+import org.gradle.kotlin.dsl.implementation
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFramework
 
@@ -87,6 +88,7 @@ kotlin {
                 implementation("com.google.android.exoplayer:exoplayer-ui:2.19.1")
                 implementation("app.cash.sqldelight:android-driver:2.2.1")
                 implementation("com.github.LottieFiles:dotlottie-android:0.5.0")
+                implementation("com.google.code.gson:gson:2.10.1")
             }
         }
 

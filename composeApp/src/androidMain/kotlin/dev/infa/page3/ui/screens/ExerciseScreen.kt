@@ -1,12 +1,18 @@
 package dev.infa.page3.ui.screens
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.with
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowBack
@@ -17,232 +23,453 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.times
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import dev.infa.page3.viewmodels.ExerciseData
+import dev.infa.page3.viewmodels.ExerciseSummary
 import dev.infa.page3.viewmodels.ExerciseViewModel
+import dev.infa.page3.viewmodels.getPopularSportTypes
+import dev.infa.page3.viewmodels.getSportName
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExerciseScreen(
-    viewModel: ExerciseViewModel,
-    navController: NavController
+    onBack: () -> Unit,
+    viewModel: ExerciseViewModel = viewModel()
 ) {
-    val live by viewModel.liveState.collectAsState()
-    val recent by viewModel.recent.collectAsState()
+    var exerciseData by remember { mutableStateOf<ExerciseData?>(null) }
+    var selectedSportType by remember { mutableStateOf(1) } // Default: Running
+    var showSummary by remember { mutableStateOf(false) }
+    var lastSummary by remember { mutableStateOf<ExerciseSummary?>(null) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Exercise") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                    }
-                }
-            )
-        }
-    ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            if (live.isActive || live.countdown != null) {
-                LiveExercise(viewModel)
-            } else {
-                ExerciseList(viewModel)
-            }
-
-            if (recent.isNotEmpty() && !(live.isActive || live.countdown != null)) {
-                RecentExerciseList(
-                    items = recent,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(16.dp)
-                )
-            }
-        }
+    // Calculate strain based on duration and heart rate
+    val strain = remember(exerciseData) {
+        exerciseData?.let {
+            val durationFactor = (it.elapsedSeconds / 60f) * 0.15f
+            val hrFactor = if (it.heartRate > 100) (it.heartRate - 100) * 0.05f else 0f
+            (durationFactor + hrFactor).coerceIn(0f, 21f)
+        } ?: 0f
     }
-}
 
-@Composable
-private fun ExerciseList(viewModel: ExerciseViewModel) {
-    val types = viewModel.availableSportTypes
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Choose an exercise", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(12.dp))
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(types) { (id, name) ->
-                Card(
-                    modifier = Modifier.fillMaxWidth().clickable { viewModel.startExercise(id) },
-                    elevation = CardDefaults.cardElevation(2.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(name, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                        Text("Start", color = MaterialTheme.colorScheme.primary)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun LiveExercise(viewModel: ExerciseViewModel) {
-    val live by viewModel.liveState.collectAsState()
-    var showMinDialog by remember { mutableStateOf(false) }
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState())
     ) {
-        Text(text = sportName(live.sportType ?: 10), fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(24.dp))
+        Text(
+            "Strain & Activity",
+            color = Color.White,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold
+        )
 
-        if (live.countdown != null) {
-            Text(
-                text = "${live.countdown}",
-                fontSize = 64.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
+        Spacer(Modifier.height(16.dp))
+
+        // Error Message
+        errorMessage?.let { error ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0x22FF0000))
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(error, color = Color.Red, fontSize = 12.sp)
+                    TextButton(onClick = { errorMessage = null }) {
+                        Text("✕", color = Color.Red)
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
+        // ACTIVE WORKOUT CARD
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = if (exerciseData?.isActive == true)
+                    Color(0x2200FF88) else Color(0x22111111)
             )
-        } else {
-            Text(text = formatDuration(live.elapsedSec), fontSize = 40.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(16.dp))
-            MetricsRow(live.heartRate, live.steps, live.distanceMeters, live.calories)
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    when {
+                        exerciseData?.isPaused == true -> "Workout Paused"
+                        exerciseData?.isActive == true -> "Workout Active"
+                        else -> "Ready To Train"
+                    },
+                    color = if (exerciseData?.isPaused == true) Color.Yellow else Color.Gray
+                )
 
-            Spacer(Modifier.height(24.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (live.isPaused) {
-                    Button(onClick = { viewModel.resumeExercise() }) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("Resume")
+                Spacer(Modifier.height(12.dp))
+
+                // Timer Display
+                Text(
+                    exerciseData?.getFormattedDuration() ?: "00:00:00",
+                    fontSize = 42.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (exerciseData?.isActive == true) Color.White else Color.Gray
+                )
+
+                // Strain Display (when active)
+                if (exerciseData?.isActive == true) {
+                    Spacer(Modifier.height(10.dp))
+
+                    Text(
+                        "Strain: ${String.format("%.1f", strain)}",
+                        fontSize = 32.sp,
+                        color = getStrainColor(strain)
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
+                    // Strain Progress Bar
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .background(Color.DarkGray, RoundedCornerShape(50))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth((strain / 21f).coerceIn(0f, 1f))
+                                .height(8.dp)
+                                .background(getStrainColor(strain), RoundedCornerShape(50))
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                // STATS GRID
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    StatItem(
+                        "🔥",
+                        exerciseData?.calories?.toString() ?: "0",
+                        "kcal"
+                    )
+                    StatItem(
+                        "❤️",
+                        exerciseData?.heartRate?.toString() ?: "0",
+                        "BPM"
+                    )
+                    StatItem(
+                        "👣",
+                        exerciseData?.steps?.toString() ?: "0",
+                        "steps"
+                    )
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                // Control Buttons
+                if (exerciseData?.isActive == true) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Pause/Resume Button
+                        Button(
+                            onClick = {
+                                if (exerciseData?.isPaused == true) {
+                                    viewModel.resumeExercise()
+                                } else {
+                                    viewModel.pauseExercise()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF3B82F6)
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                if (exerciseData?.isPaused == true) "Resume" else "Pause",
+                                color = Color.White
+                            )
+                        }
+
+                        // End Button
+                        Button(
+                            onClick = { viewModel.endExercise() },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.Red
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("End Workout", color = Color.White)
+                        }
                     }
                 } else {
-                    Button(onClick = { viewModel.pauseExercise() }) {
-                        Icon(Icons.Default.Pause, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("Pause")
+                    // Start Button
+                    Button(
+                        onClick = {
+                            viewModel.startExercise(
+                                sportType = selectedSportType,
+                                onUpdate = { data -> exerciseData = data },
+                                onEnd = { summary ->
+                                    lastSummary = summary
+                                    exerciseData = null
+                                    showSummary = true
+                                },
+                                onErrorCallback = { error -> errorMessage = error }
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF00FF88)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            "Start ${getSportName(selectedSportType)}",
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
-                }
-                OutlinedButton(onClick = {
-                    if (live.elapsedSec < 60) {
-                        showMinDialog = true
-                    } else {
-                        viewModel.endExercise()
-                    }
-                }) {
-                    Icon(Icons.Default.Stop, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text("End")
                 }
             }
-            live.error?.let { err ->
-                Spacer(Modifier.height(12.dp))
-                Text(text = err, color = MaterialTheme.colorScheme.error)
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // LIVE STATS (when active)
+        AnimatedVisibility(exerciseData?.isActive == true) {
+            Column {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    InfoCard(
+                        "📍 ${exerciseData?.getFormattedDistance() ?: "0 m"}",
+                        "Distance"
+                    )
+                    InfoCard(
+                        "⚡ ${exerciseData?.calories?.let {
+                            if (exerciseData?.elapsedSeconds ?: 0 > 0)
+                                String.format("%.1f", it.toFloat() / (exerciseData?.elapsedSeconds ?: 1) * 60)
+                            else "0.0"
+                        } ?: "0.0"}",
+                        "kcal/min"
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+        }
+
+        // EXERCISE TYPE SELECTOR (when inactive)
+        AnimatedVisibility(exerciseData?.isActive != true && !showSummary) {
+            Column {
+                Text("Activity Type", color = Color.White, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(10.dp))
+
+                val sportTypes = getPopularSportTypes()
+
+                // First row
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    ExerciseTypeButton(
+                        "🏃", sportTypes[0].second, sportTypes[0].first,
+                        selectedSportType == sportTypes[0].first
+                    ) { selectedSportType = sportTypes[0].first }
+
+                    ExerciseTypeButton(
+                        "🚴", sportTypes[1].second, sportTypes[1].first,
+                        selectedSportType == sportTypes[1].first
+                    ) { selectedSportType = sportTypes[1].first }
+
+                    ExerciseTypeButton(
+                        "🚶", sportTypes[2].second, sportTypes[2].first,
+                        selectedSportType == sportTypes[2].first
+                    ) { selectedSportType = sportTypes[2].first }
+                }
+
+                Spacer(Modifier.height(10.dp))
+
+                // Second row
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    ExerciseTypeButton(
+                        "🏊", sportTypes[5].second, sportTypes[5].first,
+                        selectedSportType == sportTypes[5].first
+                    ) { selectedSportType = sportTypes[5].first }
+
+                    ExerciseTypeButton(
+                        "🧘", sportTypes[6].second, sportTypes[6].first,
+                        selectedSportType == sportTypes[6].first
+                    ) { selectedSportType = sportTypes[6].first }
+
+                    ExerciseTypeButton(
+                        "💪", sportTypes[9].second, sportTypes[9].first,
+                        selectedSportType == sportTypes[9].first
+                    ) { selectedSportType = sportTypes[9].first }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // WORKOUT SUMMARY (after ending)
+        AnimatedVisibility(showSummary && lastSummary != null) {
+            Column {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0x22111111)
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            "Workout Complete! 🎉",
+                            color = Color(0xFF00FF88),
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Spacer(Modifier.height(12.dp))
+
+                        lastSummary?.let { summary ->
+                            Text(
+                                summary.sportName,
+                                color = Color.White,
+                                fontSize = 18.sp
+                            )
+                            Spacer(Modifier.height(8.dp))
+
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                SummaryDetail("⏱️", summary.getFormattedDuration())
+                                SummaryDetail("📍", summary.getFormattedDistance())
+                                SummaryDetail("🔥", "${summary.calories} kcal")
+                            }
+
+                            Spacer(Modifier.height(8.dp))
+
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                SummaryDetail("❤️", "${summary.averageHeartRate} bpm")
+                                SummaryDetail("👣", "${summary.steps} steps")
+                                SummaryDetail("💪", String.format("%.1f", strain))
+                            }
+                        }
+
+                        Spacer(Modifier.height(16.dp))
+
+                        Button(
+                            onClick = { showSummary = false },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF00FF88)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Done", color = Color.Black, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
             }
         }
     }
+}
 
-    if (showMinDialog) {
-        AlertDialog(
-            onDismissRequest = { showMinDialog = false },
-            title = { Text("Keep going") },
-            text = { Text("Please exercise at least 1 minute to save your session.") },
-            confirmButton = {
-                TextButton(onClick = { showMinDialog = false }) { Text("Continue") }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showMinDialog = false
-                    // End without saving to recent
-                    viewModel.endExerciseDontSave()
-                }) { Text("Discard") }
-            }
+@Composable
+fun StatItem(icon: String, value: String, unit: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(icon, fontSize = 22.sp)
+        Spacer(Modifier.height(4.dp))
+        Text(value, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text(unit, color = Color.Gray, fontSize = 12.sp)
+    }
+}
+
+@Composable
+fun ExerciseTypeButton(
+    icon: String,
+    name: String,
+    sportType: Int,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .width(100.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                if (isSelected) Color(0x4400FF88) else Color(0x22111111)
+            )
+            .border(
+                width = if (isSelected) 2.dp else 0.dp,
+                color = if (isSelected) Color(0xFF00FF88) else Color.Transparent,
+                shape = RoundedCornerShape(16.dp)
+            )
+            .clickable { onClick() }
+            .padding(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(icon, fontSize = 24.sp)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            name,
+            color = if (isSelected) Color(0xFF00FF88) else Color.White,
+            fontSize = 12.sp,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
         )
     }
 }
 
 @Composable
-private fun RecentExerciseList(items: List<dev.infa.page3.viewmodels.ExerciseSummary>, modifier: Modifier = Modifier) {
-    Card(modifier = modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(4.dp)) {
-        Column(Modifier.padding(12.dp)) {
-            Text("Recent Activity", fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(8.dp))
-            items.take(5).forEach { s ->
-                val pace = if (s.distanceMeters > 0) s.durationSec.toFloat() / (s.distanceMeters / 1000f) else 0f
-                val paceStr = if (pace > 0f) {
-                    val min = (pace / 60f).toInt(); val sec = (pace % 60f).toInt(); String.format("%d'%02d\"/km", min, sec)
-                } else "--"
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(text = sportName(s.sportType), fontWeight = FontWeight.Medium)
-                        Text(text = "${formatDuration(s.durationSec)} · ${String.format("%.2f km", s.distanceMeters/1000f)} · $paceStr",
-                            style = MaterialTheme.typography.bodySmall)
-                    }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(text = "Avg ${s.avgHeartRate} bpm", style = MaterialTheme.typography.bodySmall)
-                        Text(text = "${s.calories} kcal", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-                Divider()
-            }
-        }
-    }
-}
-
-@Composable
-private fun MetricsRow(hr: Int, steps: Int, dist: Int, kcal: Int) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly
+fun InfoCard(value: String, label: String) {
+    Column(
+        modifier = Modifier
+            .width(160.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color(0x22111111))
+            .padding(16.dp)
     ) {
-        MetricItem(label = "BPM", value = "$hr")
-        MetricItem(label = "Steps", value = "$steps")
-        MetricItem(label = "Distance", value = String.format("%.2f km", dist / 1000f))
-        MetricItem(label = "Cal", value = "$kcal")
+        Text(value, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(4.dp))
+        Text(label, color = Color.Gray, fontSize = 12.sp)
     }
 }
 
 @Composable
-private fun MetricItem(label: String, value: String) {
+fun SummaryDetail(icon: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Text(label, fontSize = 12.sp)
+        Text(icon, fontSize = 18.sp)
+        Spacer(Modifier.height(4.dp))
+        Text(value, color = Color.White, fontSize = 14.sp)
     }
 }
 
-@Composable
-private fun RecentExerciseSummary(title: String, summary: String, modifier: Modifier = Modifier) {
-    Card(modifier = modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(3.dp)) {
-        Column(Modifier.padding(16.dp)) {
-            Text(title, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(4.dp))
-            Text(summary)
-        }
+fun getStrainColor(value: Float): Color {
+    return when {
+        value < 7 -> Color.Gray
+        value < 14 -> Color(0xFF3B82F6)
+        else -> Color(0xFF00FF88)
     }
-}
-
-private fun formatDuration(total: Int): String {
-    val h = total / 3600
-    val m = (total % 3600) / 60
-    val s = total % 60
-    return if (h > 0) String.format("%d:%02d:%02d", h, m, s) else String.format("%02d:%02d", m, s)
-}
-
-private fun sportName(type: Int): String = when (type) {
-    4 -> "Walking"
-    7 -> "Running"
-    8 -> "Hiking"
-    9 -> "Cycling"
-    else -> "Others"
 }
 
 

@@ -1,198 +1,153 @@
 package dev.infa.page3.ui.screens
 
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
+import android.util.Log
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import dev.infa.page3.viewmodels.StressPoint
-import dev.infa.page3.viewmodels.StressViewModel
-import java.text.SimpleDateFormat
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.infa.page3.ui.components.CommonHealthMetricsScreen
+import dev.infa.page3.ui.components.ContinuousMonitorConfig
+import dev.infa.page3.ui.components.ErrorScreen
+import dev.infa.page3.ui.components.ErrorScreenSDK
+import dev.infa.page3.ui.components.HealthMeasurement
+import dev.infa.page3.ui.components.HealthMetricData
+import dev.infa.page3.ui.components.LoadingScreen
+import dev.infa.page3.ui.navigation.HealthMetricsViewModelFactory
+import dev.infa.page3.viewmodels.BloodPressureViewModel
+import dev.infa.page3.viewmodels.BpData
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.*
 
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StressScreen(
-    viewModel: StressViewModel,
-    onNavigateBack: () -> Unit
+fun BloodPressureScreen(
+    onBack: () -> Unit,
+    viewModel: BloodPressureViewModel
 ) {
-    // Collect states
-    val isLoading by viewModel.isLoading.collectAsState()
-    val error by viewModel.error.collectAsState()
-    val isMeasuring by viewModel.isMeasuring.collectAsState()
-    val measurementProgress by viewModel.measurementProgress.collectAsState()
-    val currentStress by viewModel.currentStress.collectAsState()
-    val instantStress by viewModel.instantStress.collectAsState()
-    val averageStress by viewModel.averageStress.collectAsState()
-    val minStress by viewModel.minStress.collectAsState()
-    val maxStress by viewModel.maxStress.collectAsState()
-    val allReadings by viewModel.allReadings.collectAsState()
-    val intervalReadings by viewModel.intervalReadings.collectAsState()
-    val isMonitoringEnabled by viewModel.isMonitoringEnabled.collectAsState()
+    var selectedDate by remember { mutableStateOf(Date()) }
+    var bpData by remember { mutableStateOf<BpData?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    Scaffold(
-        topBar = {
-            HealthTopBar(
-                title = "Stress Monitor",
-                onNavigateBack = onNavigateBack,
-                onRefresh = { viewModel.refresh(0) },
-                isLoading = isLoading,
-                isMeasuring = isMeasuring
-            )
-        }
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Current Stress Display
-            item {
-                HealthValueCard(
-                    currentValue = currentStress,
-                    unit = "Level",
-                    icon = Icons.Default.Psychology,
-                    iconColor = HealthColors.PrimaryStress,
-                    valueColor = HealthColors.PrimaryStress,
-                    isMeasuring = isMeasuring,
-                    measurementProgress = measurementProgress,
-                    instantValue = instantStress,
-                    liveValue = currentStress
-                )
-            }
-
-            // Instant Measurement
-            item {
-                InstantMeasurementCard(
-                    title = "Instant Measurement",
-                    subtitle = "Takes ~30 seconds",
-                    isMeasuring = isMeasuring,
-                    measurementProgress = measurementProgress,
-                    isLoading = isLoading,
-                    buttonColor = HealthColors.PrimaryStress,
-                    buttonIcon = Icons.Default.Psychology,
-                    onMeasure = { viewModel.measureStressOnce() },
-                    onStop = { viewModel.stopMeasurement() }
-                )
-            }
-
-            // Continuous Monitoring
-            item {
-                ContinuousMonitoringCard(
-                    title = "Continuous Monitoring",
-                    subtitle = "Auto monitoring at 30-min intervals",
-                    intervalMinutes = 30,
-                    isEnabled = isMonitoringEnabled,
-                    isLoading = isLoading,
-                    isMeasuring = isMeasuring,
-                    onToggle = { viewModel.toggleContinuousMonitoring(it) }
-                )
-            }
-
-            // Statistics
-            if (averageStress > 0 || minStress > 0 || maxStress > 0) {
-                item {
-                    StatisticsRow(
-                        stats = listOf(
-                            StatItem(
-                                label = "Average",
-                                value = if (averageStress > 0) "$averageStress" else "--",
-                                icon = Icons.Default.PsychologyAlt,
-                                color = HealthColors.PrimaryStress
-                            ),
-                            StatItem(
-                                label = "Minimum",
-                                value = if (minStress > 0) "$minStress" else "--",
-                                icon = Icons.Default.ArrowDownward,
-                                color = HealthColors.Success
-                            ),
-                            StatItem(
-                                label = "Maximum",
-                                value = if (maxStress > 0) "$maxStress" else "--",
-                                icon = Icons.Default.ArrowUpward,
-                                color = HealthColors.Danger
-                            )
-                        )
-                    )
-                }
-            }
-
-            // Stress Chart
-            if (intervalReadings.isNotEmpty()) {
-                item {
-                    ChartCard(
-                        title = "30-Minute Intervals",
-                        readingsCount = intervalReadings.size,
-                        readings = intervalReadings,
-                        getValue = { it.level },
-                        chartColor = HealthColors.PrimaryStress
-                    )
-                }
-            }
-
-            // All Readings List
-            val validReadings = allReadings.filter { it.level > 0 }
-            if (validReadings.isNotEmpty()) {
-                item {
-                    ReadingsListCard(
-                        title = "Recent Readings",
-                        totalCount = validReadings.size,
-                        readings = validReadings,
-                        maxDisplay = 10,
-                        getTimestamp = { it.timestamp },
-                        getValue = { it.level },
-                        unit = "Level",
-                        valueColor = HealthColors.PrimaryStress,
-                        timeFormat = "MMM dd, HH:mm"
-                    )
-                }
-            }
-
-            // Empty State
-            if (intervalReadings.isEmpty() && !isLoading && !isMeasuring) {
-                item {
-                    EmptyStateCard(
-                        icon = Icons.Default.Psychology,
-                        title = "No Stress Data Yet",
-                        subtitle = "Enable monitoring or measure now to start tracking"
-                    )
-                }
-            }
-
-            // Loading Indicator
-            if (isLoading) {
-                item {
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = HealthColors.PrimaryStress
-                    )
-                }
-            }
-
-            // Error Display
-            error?.let { errorMessage ->
-                item {
-                    ErrorCard(message = errorMessage)
-                }
-            }
-        }
+    val dateOffset = remember(selectedDate) {
+        val today = Calendar.getInstance()
+        val selected = Calendar.getInstance().apply { time = selectedDate }
+        val diffInMillis = today.timeInMillis - selected.timeInMillis
+        (diffInMillis / (1000 * 60 * 60 * 24)).toInt()
     }
+
+    LaunchedEffect(dateOffset) {
+        isLoading = true
+        errorMessage = null
+
+        var callbackReturned = false
+
+        // ✅ HARD TIMEOUT (4 SECONDS)
+        launch {
+            delay(4000)
+
+            if (!callbackReturned) {
+                Log.e("BpScreen", "BLE TIMEOUT → Forcing ZERO BP UI")
+
+                isLoading = false
+            }
+        }
+
+        viewModel.syncBpDataForDay(
+            offset = dateOffset,
+
+            onSuccess = { data ->
+                callbackReturned = true
+                bpData = data
+                isLoading = false
+
+                Log.d("BpScreen", "BP Data Loaded Successfully")
+            },
+
+            onError = { error ->
+                callbackReturned = true
+                Log.e("BpScreen", "BLE Error: $error")
+
+                isLoading = false
+            }
+        )
+    }
+
+
+    val measurements = remember(bpData) {
+        bpData?.bpValues?.map { entry ->
+            val time = formatTimestamp(entry.timestamp)
+            val status = when {
+                entry.systolic >= 140 || entry.diastolic >= 90 -> "High"
+                entry.systolic >= 130 || entry.diastolic >= 80 -> "Elevated"
+                else -> "Normal"
+            }
+            val color = when {
+                entry.systolic >= 140 || entry.diastolic >= 90 -> Color(0xFFFF6B6B)
+                entry.systolic >= 130 || entry.diastolic >= 80 -> Color(0xFFFFAA00)
+                else -> Color(0xFF00FF88)
+            }
+            HealthMeasurement(time, entry.systolic, status, color)
+        } ?: emptyList()
+    }
+
+    val metricData = HealthMetricData(
+        title = "Blood Pressure",
+        icon = Icons.Default.MonitorHeart,
+        iconColor = Color(0xFFFF6B6B),
+        unit = "mmHg",
+        average = bpData?.averageSystolic ?: 0,
+        min = bpData?.minSystolic ?: 0,
+        max = bpData?.maxSystolic ?: 0,
+        measurementDurationSeconds = 30
+    )
+
+    if (isLoading) {
+        LoadingScreen(message = "Loading BP data...", color = Color(0xFFFF6B6B))
+        return
+    }
+
+    if (errorMessage != null) {
+        ErrorScreenSDK(message = errorMessage ?: "Unknown error", onBack = onBack)
+        return
+    }
+
+    CommonHealthMetricsScreen(
+        metricData = metricData,
+        measurements = measurements,
+        selectedDate = selectedDate,
+        onDateChange = { newDate -> selectedDate = newDate },
+        onBack = onBack,
+        onMeasureClick = { onResult ->
+            viewModel.measureBpOnce { result ->
+                val bpValue = result.replace("BP: ", "")
+                    .split("/")
+                    .firstOrNull()
+                    ?.replace(" mmHg", "")
+                    ?.toIntOrNull() ?: 0
+                onResult(bpValue)
+
+                if (bpValue > 0) {
+                    viewModel.syncBpDataForDay(
+                        offset = dateOffset,
+                        onSuccess = { data -> bpData = data },
+                        onError = { }
+                    )
+                }
+            }
+        },
+        continuousMonitorConfig = ContinuousMonitorConfig(enabled = false),
+        onStartContinuousMonitor = null
+    )
 }
 

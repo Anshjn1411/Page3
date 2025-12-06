@@ -38,8 +38,6 @@ class HomeViewModel : ViewModel() {
     private val _batterValue = MutableStateFlow<Int?>(0)
     val batteryValue: StateFlow<Int?> = _batterValue.asStateFlow()
 
-    private val _todayStep = MutableStateFlow<StepData?>(null)
-    val todayStep: StateFlow<StepData?> = _todayStep.asStateFlow()
 
     private val _todaySleep = MutableStateFlow<SleepData?>(null)
     val todaySleep: StateFlow<SleepData?> = _todaySleep.asStateFlow()
@@ -138,50 +136,6 @@ class HomeViewModel : ViewModel() {
         _todaySleep.value = sleepData
     }
 
-    private suspend fun syncTodayStepsAsync() = suspendCancellableCoroutine<Unit> { continuation ->
-        var isResumed = false
-        try {
-            commandHandle.executeReqCmd(
-                SimpleKeyReq(Constants.CMD_GET_STEP_TODAY),
-                object : ICommandResponse<TodaySportDataRsp> {
-                    override fun onDataResponse(resultEntity: TodaySportDataRsp) {
-                        if (isResumed) return
-                        try {
-                            if (resultEntity.status == BaseRspCmd.RESULT_OK) {
-                                val sportTotal = resultEntity.sportTotal
-                                val stepData = StepData(
-                                    date = getCurrentDate(),
-                                    totalSteps = sportTotal.totalSteps.toLong(),
-                                    calories = sportTotal.calorie.toLong(),
-                                    distance = sportTotal.walkDistance.toLong()
-                                )
-                                _todayStep.value = stepData
-                            } else {
-                                _errorMessage.value = "Failed to get step data"
-                            }
-                        } catch (e: Exception) {
-                            _errorMessage.value = "Error processing step data: ${e.message}"
-                        } finally {
-                            if (!isResumed && continuation.isActive) {
-                                isResumed = true
-                                continuation.resume(Unit)
-                            }
-                        }
-                    }
-                }
-            )
-        } catch (e: Exception) {
-            _errorMessage.value = "Error syncing steps: ${e.message}"
-            if (!isResumed && continuation.isActive) {
-                isResumed = true
-                continuation.resume(Unit)
-            }
-        }
-
-        continuation.invokeOnCancellation {
-            if (!isResumed) isResumed = true
-        }
-    }
 
     fun getBatteryLevel() {
         viewModelScope.launch {
