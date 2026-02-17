@@ -1,0 +1,11 @@
+PRODUCT_NAME = page3
+PRODUCT_BUNDLE_IDENTIFIER = dev.infa.page3
+
+// Framework search paths for simulator (arm64)
+FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*][arch=arm64] = $(inherited) $(SRCROOT)/../composeApp/build/bin/iosSimulatorArm64/debugFramework
+
+// Framework search paths for device
+FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*] = $(inherited) $(SRCROOT)/../composeApp/build/bin/iosArm64/debugFramework
+
+// Link the framework
+OTHER_LDFLAGS = $(inherited) -framework ComposeApp

@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>page3.ipa</key>
+	<array>
+		<dict>
+			<key>architectures</key>
+			<array>
+				<string>arm64</string>
+			</array>
+			<key>certificate</key>
+			<dict>
+				<key>SHA1</key>
+				<string>9B9432A52AD8940B3A679AEDC149806A5114C278</string>
+				<key>dateExpires</key>
+				<string>30/12/26</string>
+				<key>type</key>
+				<string>Cloud Managed Apple Distribution</string>
+			</dict>
+			<key>embeddedBinaries</key>
+			<array>
+				<dict>
+					<key>architectures</key>
+					<array>
+						<string>arm64</string>
+					</array>
+					<key>buildNumber</key>
+					<string>0.1.49</string>
+					<key>certificate</key>
+					<dict>
+						<key>SHA1</key>
+						<string>9B9432A52AD8940B3A679AEDC149806A5114C278</string>
+						<key>dateExpires</key>
+						<string>30/12/26</string>
+						<key>type</key>
+						<string>Cloud Managed Apple Distribution</string>
+					</dict>
+					<key>name</key>
+					<string>DotLottiePlayer.framework</string>
+					<key>symbols</key>
+					<true/>
+					<key>team</key>
+					<dict>
+						<key>id</key>
+						<string>23H4R43UV8</string>
+						<key>name</key>
+						<string>Amit Kumar</string>
+					</dict>
+					<key>versionNumber</key>
+					<string>0.1.49</string>
+				</dict>
+			</array>
+			<key>entitlements</key>
+			<dict>
+				<key>application-identifier</key>
+				<string>23H4R43UV8.dev.infa.page3</string>
+				<key>beta-reports-active</key>
+				<true/>
+				<key>com.apple.developer.team-identifier</key>
+				<string>23H4R43UV8</string>
+				<key>get-task-allow</key>
+				<false/>
+			</dict>
+			<key>name</key>
+			<string>page3.app</string>
+			<key>profile</key>
+			<dict>
+				<key>UUID</key>
+				<string>aaaed7b5-bd89-437f-800f-1e4be06b8349</string>
+				<key>dateExpires</key>
+				<string>30/12/26</string>
+				<key>name</key>
+				<string>iOS Team Store Provisioning Profile: dev.infa.page3</string>
+			</dict>
+			<key>symbols</key>
+			<true/>
+			<key>team</key>
+			<dict>
+				<key>id</key>
+				<string>23H4R43UV8</string>
+				<key>name</key>
+				<string>Amit Kumar</string>
+			</dict>
+		</dict>
+	</array>
+</dict>
+</plist>

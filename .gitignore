@@ -1,0 +1,35 @@
+# IntelliJ / Android Studio
+*.iml
+.idea/
+.kotlin/
+.gradle/
+
+# Build folders
+**/build/
+!src/**/build/
+
+# Android
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+*.hprof
+*.apk
+*.aab
+*.aar
+
+# macOS
+.DS_Store
+
+# iOS / Xcode
+xcuserdata/
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+!*.xcodeproj/project.xcworkspace/
+!*.xcworkspace/contents.xcworkspacedata
+**/xcshareddata/WorkspaceSettings.xcsettings
+
+# Node (if used)
+node_modules/
+*.ipa
