@@ -41,7 +41,7 @@ expect class InstantMeasures: IInstantMeasures {
     )
 }
 
-expect class ContinuousMConitoring: IContinuousMonitoring {
+expect class ContinuousMonitoring: IContinuousMonitoring {
     override suspend fun toggleHeartRateMonitoring(
         enabled: Boolean,
         interval: Int

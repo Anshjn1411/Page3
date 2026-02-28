@@ -18,40 +18,27 @@ class AuthViewModel(
     private val _currentUser = MutableStateFlow<WcCustomer?>(null)
     val currentUser: StateFlow<WcCustomer?> = _currentUser
 
-    // ======================== OTP FLOW ========================
+    // ⚠️ DUMMY MODE: All OTP/Auth flows are dummy for testing.
+    // No real API calls are made. Accept any phone and any OTP.
 
     fun sendOtp(phone: String) {
-        if (!isValidPhoneNumber(phone)) {
-            _uiState.value = AuthUiState.Error("Please enter valid 10-digit mobile number")
+        if (phone.length < 10) {
+            _uiState.value = AuthUiState.Error("Please enter valid mobile number")
             return
         }
 
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
-
-            repository.sendOtp(phone).fold(
-                onSuccess = { response ->
-                    _uiState.value = AuthUiState.OtpSent(response.message, phone)
-                },
-                onFailure = { error ->
-                    _uiState.value = AuthUiState.Error(error.message ?: "Failed to send OTP")
-                }
-            )
+            delay(500) // Simulate network delay
+            _uiState.value = AuthUiState.OtpSent("OTP sent successfully (dummy)", phone)
         }
     }
 
     fun resendOtp(phone: String) {
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
-
-            repository.resendOtp(phone).fold(
-                onSuccess = { response ->
-                    _uiState.value = AuthUiState.OtpSent(response.message, phone)
-                },
-                onFailure = { error ->
-                    _uiState.value = AuthUiState.Error(error.message ?: "Failed to resend OTP")
-                }
-            )
+            delay(500) // Simulate network delay
+            _uiState.value = AuthUiState.OtpSent("OTP resent successfully (dummy)", phone)
         }
     }
 
@@ -63,42 +50,23 @@ class AuthViewModel(
 
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
+            delay(500) // Simulate network delay
 
-            repository.verifyOtp(phone, otp).fold(
-                onSuccess = { response ->
-                    when {
-                        response.requiresSignup == true -> {
-                            _uiState.value = AuthUiState.NewUser(phone)
-                        }
-                        response.token != null && response.user != null -> {
-                            _currentUser.value = response.user
-                            _uiState.value = AuthUiState.LoggedIn
-                        }
-                        else -> {
-                            _uiState.value = AuthUiState.Error("Verification failed")
-                        }
-                    }
-                },
-                onFailure = { error ->
-                    _uiState.value = AuthUiState.Error(error.message ?: "OTP verification failed")
-                }
+            // Dummy: create user locally and log in immediately
+            val dummyUser = WcCustomer(
+                id = phone,
+                phone = phone,
+                isPhoneVerified = true
             )
+            _currentUser.value = dummyUser
+            _uiState.value = AuthUiState.LoggedIn
         }
     }
 
     // ======================== USER MANAGEMENT ========================
 
     fun getCurrentUser() {
-        viewModelScope.launch {
-            repository.getCurrentUser().fold(
-                onSuccess = { user ->
-                    _currentUser.value = user
-                },
-                onFailure = { error ->
-                    _uiState.value = AuthUiState.Error(error.message ?: "Failed to fetch user")
-                }
-            )
-        }
+        // Dummy: no-op, user already set from verifyOtp
     }
 
     // ======================== PROFILE COMPLETION ========================
@@ -115,55 +83,20 @@ class AuthViewModel(
         postcode: String,
         country: String
     ) {
-        if (firstName.isBlank() || lastName.isBlank() || email.isBlank() ||
-            address.isBlank() || city.isBlank() || state.isBlank() ||
-            postcode.isBlank() || country.isBlank()) {
-            _uiState.value = AuthUiState.Error("Please fill all required fields")
-            return
-        }
-
+        // Dummy: just log in with phone
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
-
-            val billingAddress = WcAddress(
-                first_name = firstName,
-                last_name = lastName,
-                address_1 = address,
-                city = city,
-                state = state,
-                postcode = postcode,
-                country = country,
-                email = email,
-                phone = phone
-            )
-
-            val shippingAddress = WcAddress(
-                first_name = firstName,
-                last_name = lastName,
-                address_1 = address,
-                city = city,
-                state = state,
-                postcode = postcode,
-                country = country
-            )
-
-            repository.completeProfile(
+            delay(300)
+            val dummyUser = WcCustomer(
+                id = phone,
                 phone = phone,
+                first_name = firstName,
+                last_name = lastName,
                 email = email,
-                firstName = firstName,
-                lastName = lastName,
-                username = username,
-                billing = billingAddress,
-                shipping = shippingAddress
-            ).fold(
-                onSuccess = { response ->
-                    _currentUser.value = response.user
-                    _uiState.value = AuthUiState.RegisterSuccess
-                },
-                onFailure = { error ->
-                    _uiState.value = AuthUiState.Error(error.message ?: "Profile completion failed")
-                }
+                isPhoneVerified = true
             )
+            _currentUser.value = dummyUser
+            _uiState.value = AuthUiState.RegisterSuccess
         }
     }
 
@@ -177,25 +110,17 @@ class AuthViewModel(
         billing: WcAddress? = null,
         shipping: WcAddress? = null
     ) {
+        // Dummy: just update local user
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
-
-            repository.updateProfile(
-                email = email,
-                firstName = firstName,
-                lastName = lastName,
-                username = username,
-                billing = billing,
-                shipping = shipping
-            ).fold(
-                onSuccess = { response ->
-                    _currentUser.value = response.user
-                    _uiState.value = AuthUiState.ProfileUpdated
-                },
-                onFailure = { error ->
-                    _uiState.value = AuthUiState.Error(error.message ?: "Profile update failed")
-                }
+            delay(300)
+            val current = _currentUser.value
+            _currentUser.value = current?.copy(
+                first_name = firstName ?: current.first_name,
+                last_name = lastName ?: current.last_name,
+                email = email ?: current.email
             )
+            _uiState.value = AuthUiState.ProfileUpdated
         }
     }
 
@@ -210,34 +135,14 @@ class AuthViewModel(
     }
 
     fun checkLoginStatus() {
-        _uiState.value = if (repository.isLoggedIn()) {
-            AuthUiState.LoggedIn
-        } else {
-            AuthUiState.Idle
-        }
+        _uiState.value = AuthUiState.Idle
     }
 
     fun autoLogin() {
         viewModelScope.launch {
-
-            println("the user login status -> ${repository.isLoggedIn()}")
-            if (repository.isLoggedIn()) {
-                repository.getCurrentUser().fold(
-                    onSuccess = { user ->
-                        _currentUser.value = user
-                        _uiState.value = AuthUiState.LoggedIn
-                    },
-                    onFailure = {
-                        repository.logout()
-                        _currentUser.value = null
-                        _uiState.value = AuthUiState.Idle
-                    }
-                )
-                println("the user login status Logged In succesfully-> ${_currentUser.value?.first_name}")
-            } else {
-                _uiState.value = AuthUiState.Idle
-                println("the user login status Logged In unsuccesfully-> ${_currentUser.value?.first_name}")
-            }
+            // Dummy: no persistent session, always start as Idle
+            _uiState.value = AuthUiState.Idle
+            println("⚠️ DUMMY MODE: autoLogin skipped, no API calls")
         }
     }
 

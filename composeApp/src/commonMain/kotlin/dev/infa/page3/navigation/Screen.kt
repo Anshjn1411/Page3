@@ -4,6 +4,8 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import androidx.compose.runtime.*
+import dev.infa.page3.SDK.bottle.IBottleSyncManager
+import dev.infa.page3.SDK.bottle.viewmodel.BottleViewModel
 import dev.infa.page3.SDK.connection.ConnectionManager
 import dev.infa.page3.SDK.repository.ConnectionRepository
 import dev.infa.page3.SDK.server.HealthDataRepository
@@ -40,7 +42,7 @@ import dev.infa.page3.ui.AccountDetailsScreen
 import dev.infa.page3.ui.MainScreen
 import dev.infa.page3.ui.SplashScreen
 import dev.infa.page3.ui.auth.OtpVerificationScreen
-import dev.infa.page3.ui.auth.RegistrationScreen
+
 import dev.infa.page3.ui.auth.WelcomeScreen
 import dev.infa.page3.ui.CartScreen
 import dev.infa.page3.ui.ShopScreen
@@ -54,6 +56,7 @@ import dev.infa.page3.ui.orderscreen.CheckoutScreenContent
 import dev.infa.page3.ui.otherScreen.InboxScreen
 import dev.infa.page3.ui.orderscreen.OrderHistoryScreenContent
 import dev.infa.page3.ui.orderscreen.OrderSuccessScreenContent
+import dev.infa.page3.ui.orderscreen.PaymentWebViewScreenContent
 import dev.infa.page3.ui.otherScreen.AboutUsScreen
 import dev.infa.page3.ui.otherScreen.ContactUsScreen
 import dev.infa.page3.ui.otherScreen.FaqScreen
@@ -83,18 +86,40 @@ object AuthManager {
         )
     }
 
+    private val _currentUser = MutableStateFlow<WcCustomer?>(null)
+    val currentUser: StateFlow<WcCustomer?> = _currentUser
+
+    private var isInitialized = false
+
     fun init() {
+        if (isInitialized) return
+        isInitialized = true
+
         // run only once when app launches - check for persistent login
         viewModel.autoLogin()
         viewModel.uiState.onEach { state ->
             _authState.value = state
         }.launchIn(CoroutineScope(Dispatchers.Main))
+
+        // Sync currentUser from viewModel
+        viewModel.currentUser.onEach { user ->
+            _currentUser.value = user
+        }.launchIn(CoroutineScope(Dispatchers.Main))
     }
 
-    val currentUser: StateFlow<WcCustomer?> = viewModel.currentUser
+    /**
+     * Called when a user successfully logs in from any screen (e.g., OTP verification).
+     * Updates the global auth state so all screens (profile, etc.) see the logged-in state.
+     */
+    fun setLoggedIn(user: WcCustomer) {
+        _currentUser.value = user
+        _authState.value = AuthUiState.LoggedIn
+    }
 
     fun logout() {
         viewModel.logout()
+        _currentUser.value = null
+        _authState.value = AuthUiState.Idle
     }
 }
 
@@ -169,32 +194,8 @@ data class OTPScreenVerify(
 
         OtpVerificationScreen(
             mobile = mobile,
-            onNavigateToRegister = { mobile ->
-                navigator.push(RegisterScreen(mobile))
-            },
             onNavigateToMain = {
-                navigator.push(HomeMainScreen(
-
-                ))
-            },
-            onNavigateBack = { navigator.pop() }
-        )
-    }
-}
-
-data class RegisterScreen(
-    val mobile: String,
-) : Screen {
-    @Composable
-    override fun Content() {
-        val navigator = LocalNavigator.currentOrThrow
-
-        RegistrationScreen(
-            mobile = mobile,
-            onNavigateToMain = {
-                navigator.push(HomeMainScreen(
-
-                ))
+                navigator.push(HomeMainScreen())
             },
             onNavigateBack = { navigator.pop() }
         )
@@ -484,6 +485,36 @@ class ShippingPolicyScreenNav() : Screen {
 //    }
 //}
 
+
+
+data class PaymentWebViewScreenNav(
+    val paymentUrl: String,
+    val orderId: Int,
+    val orderNumber: String,
+    val total: String
+) : Screen {
+    @Composable
+    override fun Content() {
+        val navigator = LocalNavigator.currentOrThrow
+        val orderViewModel = remember {
+            OrderViewModel(
+                dev.infa.page3.presentation.repositary.OrderRepository(
+                    dev.infa.page3.presentation.api.ApiService(),
+                    dev.infa.page3.data.remote.SessionManager()
+                )
+            )
+        }
+        PaymentWebViewScreenContent(
+            navigator = navigator,
+            paymentUrl = paymentUrl,
+            orderId = orderId,
+            orderNumber = orderNumber,
+            total = total,
+            orderViewModel = orderViewModel
+        )
+    }
+}
+
 //class OrderSuccessScreen(
 //    private val orderViewModel: OrderViewModel
 //) : Screen {
@@ -518,6 +549,10 @@ object AppViewModels {
     lateinit var continuousMonitoringViewModel: ContinuousMonitoringViewModel
         private set
 
+    // Bottle ViewModel
+    lateinit var bottleViewModel: BottleViewModel
+        private set
+
 
     // E-commerce ViewModels
     lateinit var authViewModel: AuthViewModel
@@ -540,7 +575,8 @@ object AppViewModels {
         profileManager: ProfileManager,
         syncManager: ISyncManager,
         instantMeasures: IInstantMeasures,
-        continuousMonitoring: IContinuousMonitoring
+        continuousMonitoring: IContinuousMonitoring,
+        bottleSyncManager: IBottleSyncManager? = null
     ) {
         if (isInitialized) {
             println("⚠️ Already initialized")
@@ -559,6 +595,11 @@ object AppViewModels {
                 { sessionManager.getAuthToken() })
             instantMeasuresViewModel = InstantMeasuresViewModel(instantMeasures)
             continuousMonitoringViewModel = ContinuousMonitoringViewModel(continuousMonitoring)
+
+            // Bottle ViewModel
+            if (bottleSyncManager != null) {
+                bottleViewModel = BottleViewModel(bottleSyncManager)
+            }
 
             // E-commerce ViewModels
 

@@ -86,9 +86,9 @@ val httpClient = HttpClient {
 
 class ApiService {
 
-    private val authBaseUrl = "http://72.60.205.209:6000/api/auth"
+    private val authBaseUrl = "https://page3-backend.onrender.com/api/auth"
 
-    private val healthBaseUrl = "http://72.60.205.209:6000/api/health"
+    private val healthBaseUrl = "https://page3-backend.onrender.com/health"
 
     // WordPress site base (replace with your domain)
     private val baseUrl = "https://www.page3life.com"

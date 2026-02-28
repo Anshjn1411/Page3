@@ -78,7 +78,7 @@ kotlin {
                 implementation("androidx.fragment:fragment-ktx:1.6.0")
 
                 implementation("io.ktor:ktor-client-okhttp:3.3.3")
-                implementation(files("libs/qring_sdk_20250516.aar"))
+                implementation(files("libs/QWatchPro__sdk_20251120.aar"))
                 implementation("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
                 implementation("org.greenrobot:eventbus:3.3.1")
                 implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
@@ -118,8 +118,8 @@ android {
         applicationId = "dev.infa.page3"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 9
-        versionName = "1.1"
+        versionCode = 16
+        versionName = "1.4"
     }
 
     packaging {
@@ -134,11 +134,16 @@ android {
 
     buildTypes {
         getByName("release") {
-            isMinifyEnabled = false
-        }
-        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+
             ndk {
-                debugSymbolLevel = "SYMBOL_TABLE"
+                debugSymbolLevel = "FULL"
             }
         }
     }

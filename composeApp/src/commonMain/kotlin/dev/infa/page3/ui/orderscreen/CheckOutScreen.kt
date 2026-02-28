@@ -51,9 +51,10 @@ import cafe.adriel.voyager.navigator.Navigator
 import dev.infa.page3.data.model.CartItemWithAttributes
 import dev.infa.page3.data.model.CreateOrderRequest
 import dev.infa.page3.data.remote.SessionManager
+import dev.infa.page3.navigation.PaymentWebViewScreenNav
 import dev.infa.page3.presentation.api.ApiService
 import dev.infa.page3.presentation.repositary.OrderRepository
-import dev.infa.page3.presentation.repository.UserRepository
+
 import dev.infa.page3.presentation.uiSatateClaases.ListUiState
 import dev.infa.page3.presentation.uiSatateClaases.SingleUiState
 import dev.infa.page3.presentation.viewModel.AuthViewModel
@@ -332,6 +333,46 @@ fun CheckoutScreenContent(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // PhonePe Option
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { selectedPaymentMethod = "phonepe" },
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (selectedPaymentMethod == "phonepe")
+                            MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surface
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = selectedPaymentMethod == "phonepe",
+                            onClick = { selectedPaymentMethod = "phonepe" }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "PhonePe (Online Payment)",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Pay securely via PhonePe UPI / Cards / Net Banking",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
                 // Error Message
                 if (errorMessage != null) {
                     Card(
@@ -371,18 +412,18 @@ fun CheckoutScreenContent(
                         )
 
                         if (validateAddress(address)) {
-                            // For COD, create order directly
+                            val cartItems = when (cartState) {
+                                is ListUiState.Success -> (cartState as ListUiState.Success<CartItemWithAttributes>).data
+                                else -> emptyList()
+                            }
+
+                            if (cartItems.isEmpty()) {
+                                errorMessage = "Your cart is empty. Please add items to cart first."
+                                return@Button
+                            }
+
                             if (selectedPaymentMethod == "cod") {
-                                val cartItems = when (cartState) {
-                                    is ListUiState.Success -> (cartState as ListUiState.Success<CartItemWithAttributes>).data
-                                    else -> emptyList()
-                                }
-
-                                if (cartItems.isEmpty()) {
-                                    errorMessage = "Your cart is empty. Please add items to cart first."
-                                    return@Button
-                                }
-
+                                // COD flow – create order directly
                                 orderViewModel.createCodOrder(
                                     address = address,
                                     cartItems = cartItems,
@@ -393,24 +434,29 @@ fun CheckoutScreenContent(
                                         errorMessage = error
                                     }
                                 )
-                            } else {
-                                val cartItems = when (cartState) {
-                                    is ListUiState.Success -> (cartState as ListUiState.Success<CartItemWithAttributes>).data
-                                    else -> emptyList()
-                                }
-
-                                if (cartItems.isEmpty()) {
-                                    errorMessage = "Your cart is empty. Please add items to cart first."
-                                    return@Button
-                                }
-
+                            } else if (selectedPaymentMethod == "phonepe") {
+                                // PhonePe flow – create order and navigate to WebView
+                                isLoading = true
                                 orderViewModel.buyNow(
                                     address = address,
                                     cartItems = cartItems,
-                                    onPaymentUrl = { url ->
-                                        showSuccessDialog = true
+                                    onPaymentUrl = { paymentUrl ->
+                                        isLoading = false
+                                        // Navigate to the payment WebView screen
+                                        val phonePeState = orderViewModel.phonePePaymentState.value
+                                        if (phonePeState is dev.infa.page3.presentation.viewModel.PhonePePaymentState.ReadyForPayment) {
+                                            navigator.push(
+                                                PaymentWebViewScreenNav(
+                                                    paymentUrl = phonePeState.paymentUrl,
+                                                    orderId = phonePeState.orderId,
+                                                    orderNumber = phonePeState.orderNumber,
+                                                    total = phonePeState.total
+                                                )
+                                            )
+                                        }
                                     },
                                     onError = { error ->
+                                        isLoading = false
                                         errorMessage = error
                                     }
                                 )
@@ -431,7 +477,10 @@ fun CheckoutScreenContent(
                             color = MaterialTheme.colorScheme.onPrimary
                         )
                     } else {
-                        Text("Place Order & Pay", fontSize = 16.sp)
+                        Text(
+                            if (selectedPaymentMethod == "phonepe") "Proceed to Pay" else "Place Order & Pay",
+                            fontSize = 16.sp
+                        )
                     }
                 }
 

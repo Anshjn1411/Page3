@@ -276,26 +276,13 @@ fun ModernProfileContent(
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // User Name
+        // User Phone Number
         Text(
-            text = "${userData.first_name} ${userData.last_name}",
+            text = userData.phone ?: "Phone not available",
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             color = Color(0xFF1A1A1A)
         )
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        // Email
-        userData.email?.let {
-            Text(
-                text = it,
-                fontSize = 14.sp,
-                color = Color(0xFF6B6B6B)
-            )
-        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -325,18 +312,6 @@ fun ModernProfileContent(
                 icon = Icons.Default.ShoppingBag,
                 title = "Orders",
                 onClick = { showDialog = true }
-            )
-
-            ProfileMenuCard(
-                icon = Icons.Default.LocationOn,
-                title = "Addresses",
-                onClick = { navigator.push(AccountDetail()) }
-            )
-
-            ProfileMenuCard(
-                icon = Icons.Default.Person,
-                title = "Account details",
-                onClick = { navigator.push(AccountDetail()) }
             )
 
             ProfileMenuCard(

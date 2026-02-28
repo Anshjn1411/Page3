@@ -65,7 +65,6 @@ import page3.composeapp.generated.resources.splash
 @Composable
 fun OtpVerificationScreen(
     mobile: String,
-    onNavigateToRegister: (String) -> Unit,
     onNavigateToMain: () -> Unit,
     onNavigateBack: () -> Unit
 ) {
@@ -88,16 +87,13 @@ fun OtpVerificationScreen(
         println("📌 Auth UI State changed: $uiState")
 
         when (uiState) {
-            is AuthUiState.LoggedIn,
             is AuthUiState.LoggedIn -> {
                 println("✅ Navigation: User logged in successfully")
+                // Update global AuthManager so profile and other screens see the login
+                viewModel.currentUser.value?.let { user ->
+                    AuthManager.setLoggedIn(user)
+                }
                 onNavigateToMain()
-            }
-
-            is AuthUiState.NewUser -> {
-                val state = uiState as AuthUiState.NewUser
-                println("🆕 Navigation: New user detected, mobile = ${state.phone}")
-                onNavigateToRegister(state.phone)
             }
 
             is AuthUiState.Error -> {

@@ -3,6 +3,7 @@ package dev.infa.page3.navigation
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
+import dev.infa.page3.SDK.bottle.BottleSyncManager
 import dev.infa.page3.SDK.connection.ConnectionManager
 import dev.infa.page3.SDK.connection.ConnectionPlatform
 import dev.infa.page3.SDK.platform.ContinuousMonitoring
@@ -31,6 +32,7 @@ actual suspend fun initializePlatform() {
         val syncManager = SyncManager()
         val instantMeasurement = InstantMeasures()
         val continuousMonitoring = ContinuousMonitoring()
+        val bottleSyncManager = BottleSyncManager()
 
         // Initialize all ViewModels
         AppViewModels.init(
@@ -41,6 +43,7 @@ actual suspend fun initializePlatform() {
             syncManager = syncManager,
             instantMeasures = instantMeasurement,
             continuousMonitoring = continuousMonitoring,
+            bottleSyncManager = bottleSyncManager,
         )
 
         println("✅ Platform initialized")

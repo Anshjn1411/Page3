@@ -194,6 +194,11 @@ fun MainScreen(
                                     )
                                     Spacer(modifier = Modifier.height(16.dp))
                                 }
+
+                                item {
+                                    AppFooter()
+                                    Spacer(modifier = Modifier.height(24.dp))
+                                }
                             }
                         }
                         is ListUiState.Error -> ErrorScreen((categoriesState as ListUiState.Error).message)
@@ -260,7 +265,7 @@ fun AppSideBar(
                 )
                 ModernButton(
                     label = "Gadgets",
-                    onClick = { navigator.push(CategoryScreenNav("73", "Gadgets")) }
+                    onClick = { navigator.push(CategoryScreenNav("92", "Gadgets")) }
                 )
             }
 

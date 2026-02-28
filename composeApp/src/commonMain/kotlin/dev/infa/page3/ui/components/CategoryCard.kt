@@ -34,7 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.seiko.imageloader.rememberImagePainter
 import dev.infa.page3.data.model.WcCategory
-import dev.infa.page3.ui.auth.RegistrationScreen
+
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import page3.composeapp.generated.resources.Res
