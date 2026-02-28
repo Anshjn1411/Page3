@@ -10,9 +10,11 @@ import dev.infa.page3.data.remote.getCurrentTimeMillis
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -184,8 +186,16 @@ class SyncViewModel(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    private val _isSyncing = MutableStateFlow(false)
-    val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
+    // Ref-count based syncing: isSyncing is true when any sync operation is in-flight
+    private val _activeSyncCount = MutableStateFlow(0)
+    val isSyncing: StateFlow<Boolean> = MutableStateFlow(false).also { flow ->
+        viewModelScope.launch {
+            _activeSyncCount.collect { count -> flow.value = count > 0 }
+        }
+    }
+
+    private fun beginSync() { _activeSyncCount.value++ }
+    private fun endSync() { _activeSyncCount.value = (_activeSyncCount.value - 1).coerceAtLeast(0) }
 
     private val _autoSyncCompleted = MutableStateFlow(false)
     val autoSyncCompleted: StateFlow<Boolean> = _autoSyncCompleted.asStateFlow()
@@ -207,7 +217,7 @@ class SyncViewModel(
         }
     }
 
-    fun startAutoSync() {
+    fun startAutoSync(capabilities: DeviceCapabilities? = null) {
         println("🚀 startAutoSync() called")
 
         if (_autoSyncCompleted.value) {
@@ -218,7 +228,7 @@ class SyncViewModel(
         viewModelScope.launch {
             println("🧵 Coroutine started on thread:")
 
-            _isSyncing.value = true
+            beginSync()
             _isLoading.value = true
             println("🔄 Sync flags set: isSyncing=true, isLoading=true")
 
@@ -281,6 +291,46 @@ class SyncViewModel(
 
                     hrvData?.let { syncHRVToServer(0, it) }
 
+                    // -------- SpO2 (if supported) --------
+                    if (capabilities?.hasSpO2 == true) {
+                        println("🫁 Syncing SpO2...")
+                        try {
+                            val spo2 = syncManager.syncSpO2(0)
+                            _spo2Data.value = spo2
+                            cache.save("spo2_0", spo2)
+                            println("✅ SpO2 synced")
+                            syncSpO2ToServer(0, spo2)
+                        } catch (e: Exception) {
+                            println("⚠️ SpO2 sync failed: ${e.message}")
+                        }
+                    }
+
+                    // -------- Temperature (if supported) --------
+                    if (capabilities?.hasBodyTemperature == true) {
+                        println("🌡️ Syncing Temperature...")
+                        try {
+                            val temp = syncManager.syncAutoTemperature(0)
+                            _temperatureData.value = temp
+                            cache.save("temp_0", temp)
+                            println("✅ Temperature synced")
+                        } catch (e: Exception) {
+                            println("⚠️ Temperature sync failed: ${e.message}")
+                        }
+                    }
+
+                    // -------- Pressure/Stress (if supported) --------
+                    if (capabilities?.hasBloodPressure == true) {
+                        println("💆 Syncing Pressure/Stress...")
+                        try {
+                            val pressure = syncManager.syncPressure(0)
+                            _pressureData.value = pressure
+                            cache.save("pressure_0", pressure)
+                            println("✅ Pressure synced")
+                        } catch (e: Exception) {
+                            println("⚠️ Pressure sync failed: ${e.message}")
+                        }
+                    }
+
                     _autoSyncCompleted.value = true
                     println("🎉 Auto sync completed successfully")
 
@@ -293,7 +343,7 @@ class SyncViewModel(
                 }
             }
 
-            _isSyncing.value = false
+            endSync()
             _isLoading.value = false
             println("🛑 Sync finished | isSyncing=false, isLoading=false")
         }
@@ -850,7 +900,7 @@ class SyncViewModel(
         }
 
         viewModelScope.launch {
-            _isSyncing.value = true
+            beginSync()
 
             healthRepository.syncAllHealthData(
                 token = token,
@@ -868,7 +918,7 @@ class SyncViewModel(
                 when (progress) {
                     is SyncProgress.Completed -> {
                         println("✅ Batch sync completed: ${progress.successCount} successful, ${progress.failureCount} failed")
-                        _isSyncing.value = false
+                        endSync()
                     }
                     is SyncProgress.ItemCompleted -> {
                         if (progress.success) {
@@ -900,7 +950,7 @@ class SyncViewModel(
                 }
             }
 
-            _isSyncing.value = true
+            beginSync()
             withContext(Dispatchers.Default) {
                 try {
                     val steps = syncManager.syncTodaySteps()
@@ -912,7 +962,7 @@ class SyncViewModel(
                     println("❌ Error: ${e.message}")
                 }
             }
-            _isSyncing.value = false
+            endSync()
         }
     }
 
@@ -932,7 +982,7 @@ class SyncViewModel(
                 }
             }
 
-            _isSyncing.value = true
+            beginSync()
             withContext(Dispatchers.Default) {
                 try {
                     val data = syncManager.syncStepsByOffset(offset)
@@ -945,7 +995,7 @@ class SyncViewModel(
                     println("❌ Error: ${e.message}")
                 }
             }
-            _isSyncing.value = false
+            endSync()
         }
     }
 
@@ -1044,7 +1094,7 @@ class SyncViewModel(
                 }
             }
 
-            _isSyncing.value = true
+            beginSync()
             withContext(Dispatchers.Default) {
                 try {
                     val data = syncManager.syncHeartRate(offset)
@@ -1058,7 +1108,7 @@ class SyncViewModel(
                     onError("Error: ${e.message}")
                 }
             }
-            _isSyncing.value = false
+            endSync()
         }
     }
 
@@ -1072,7 +1122,7 @@ class SyncViewModel(
         }
 
         viewModelScope.launch {
-            _isSyncing.value = true
+            beginSync()
             withContext(Dispatchers.Default) {
                 try {
                     val date = healthRepository.timestampToDate(
@@ -1113,7 +1163,7 @@ class SyncViewModel(
                     onError(e.message ?: "Unknown error")
                 }
             }
-            _isSyncing.value = false
+            endSync()
         }
     }
 
@@ -1133,7 +1183,7 @@ class SyncViewModel(
                 }
             }
 
-            _isSyncing.value = true
+            beginSync()
             withContext(Dispatchers.Default) {
                 try {
                     val data = syncManager.syncSpO2(offset)
@@ -1147,7 +1197,7 @@ class SyncViewModel(
                     onError("Error: ${e.message}")
                 }
             }
-            _isSyncing.value = false
+            endSync()
         }
     }
 
@@ -1161,7 +1211,7 @@ class SyncViewModel(
         }
 
         viewModelScope.launch {
-            _isSyncing.value = true
+            beginSync()
             withContext(Dispatchers.Default) {
                 try {
                     val date = healthRepository.timestampToDate(
@@ -1202,7 +1252,7 @@ class SyncViewModel(
                     onError(e.message ?: "Unknown error")
                 }
             }
-            _isSyncing.value = false
+            endSync()
         }
     }
 
@@ -1222,7 +1272,7 @@ class SyncViewModel(
                 }
             }
 
-            _isSyncing.value = true
+            beginSync()
             withContext(Dispatchers.Default) {
                 try {
                     val data = syncManager.syncHrv(offset)
@@ -1236,7 +1286,7 @@ class SyncViewModel(
                     onError("Error: ${e.message}")
                 }
             }
-            _isSyncing.value = false
+            endSync()
         }
     }
 
@@ -1250,7 +1300,7 @@ class SyncViewModel(
         }
 
         viewModelScope.launch {
-            _isSyncing.value = true
+            beginSync()
             withContext(Dispatchers.Default) {
                 try {
                     val date = healthRepository.timestampToDate(
@@ -1291,7 +1341,7 @@ class SyncViewModel(
                     onError(e.message ?: "Unknown error")
                 }
             }
-            _isSyncing.value = false
+            endSync()
         }
     }
 
@@ -1311,7 +1361,7 @@ class SyncViewModel(
                 }
             }
 
-            _isSyncing.value = true
+            beginSync()
             withContext(Dispatchers.Default) {
                 try {
                     // Note: You'll need to add syncBloodPressure to ISyncManager
@@ -1329,7 +1379,7 @@ class SyncViewModel(
                     onError("Error: ${e.message}")
                 }
             }
-            _isSyncing.value = false
+            endSync()
         }
     }
 
@@ -1343,7 +1393,7 @@ class SyncViewModel(
         }
 
         viewModelScope.launch {
-            _isSyncing.value = true
+            beginSync()
             withContext(Dispatchers.Default) {
                 try {
                     val date = healthRepository.timestampToDate(
@@ -1387,7 +1437,7 @@ class SyncViewModel(
                     onError(e.message ?: "Unknown error")
                 }
             }
-            _isSyncing.value = false
+            endSync()
         }
     }
 
@@ -1414,7 +1464,7 @@ class SyncViewModel(
                 }
             }
 
-            _isSyncing.value = true
+            beginSync()
             withContext(Dispatchers.Default) {
                 try {
                     val data = syncManager.syncPressure(offset)
@@ -1425,7 +1475,7 @@ class SyncViewModel(
                     onError("Error: ${e.message}")
                 }
             }
-            _isSyncing.value = false
+            endSync()
         }
     }
 
@@ -1439,7 +1489,7 @@ class SyncViewModel(
                 }
             }
 
-            _isSyncing.value = true
+            beginSync()
             withContext(Dispatchers.Default) {
                 try {
                     val data = syncManager.syncAutoTemperature(offset)
@@ -1450,7 +1500,7 @@ class SyncViewModel(
                     onError("Error: ${e.message}")
                 }
             }
-            _isSyncing.value = false
+            endSync()
         }
     }
 
@@ -1462,6 +1512,10 @@ class SyncViewModel(
         val summary = WeeklySummary(best, avgSteps, avgCal, days)
         _weeklySummary.value = summary
         cache.save("weekly_summary", summary)
+    }
+
+    fun destroy() {
+        viewModelScope.cancel()
     }
 
     fun forceRefresh() {

@@ -10,6 +10,7 @@ import dev.infa.page3.SDK.ui.utils.DateUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -212,6 +213,10 @@ class HomeViewModel(
         )
         _todaySleep.value = sleepData
     }
+
+    fun destroy() {
+        viewModelScope.cancel()
+    }
 }
 data class SleepData(
     val date: String,
@@ -227,8 +232,8 @@ data class SleepData(
     val stages: List<SleepStage> = emptyList()
 ) {
     fun getFormattedTotalSleep(): String {
-        val hours = totalDuration.toInt()
-        val minutes = ((totalDuration - hours) * 60).toInt()
+        val hours = (totalDuration / 60).toInt()
+        val minutes = (totalDuration % 60).toInt()
         return "${hours}h ${minutes}m"
     }
 

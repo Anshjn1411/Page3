@@ -7,9 +7,13 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -21,6 +25,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -29,6 +35,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.navigator.Navigator
+import dev.infa.page3.SDK.bottle.navigation.BottleDashboardScreenNav
 import dev.infa.page3.SDK.ui.navigation.HomeScreenSDK
 import dev.infa.page3.navigation.*
 import dev.infa.page3.presentation.uiSatateClaases.ListUiState
@@ -45,50 +52,104 @@ import page3.composeapp.generated.resources.splash
 
 @Composable
 fun ConnectToPage3Section(
-    onDeviceClick: () -> Unit,
+    onRingClick: () -> Unit,
+    onBottleClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+        Text(
+            text = "My Devices",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF1A1A1A),
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text(
-                text = "Connect to Page3",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-
-            Text(
-                text = "Manage your smart gadgets and devices",
-                fontSize = 14.sp,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Button(
-                onClick = onDeviceClick,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "My Device",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold
+            item {
+                DeviceCard(
+                    emoji = "💍",
+                    title = "Smart Ring",
+                    subtitle = "Health & Fitness",
+                    gradientColors = listOf(Color(0xFF6C63FF), Color(0xFF4A3FD4)),
+                    onClick = onRingClick
                 )
+            }
+            item {
+                DeviceCard(
+                    emoji = "🍶",
+                    title = "Smart Bottle",
+                    subtitle = "Hydration Tracker",
+                    gradientColors = listOf(Color(0xFF4FC3F7), Color(0xFF0288D1)),
+                    onClick = onBottleClick
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeviceCard(
+    emoji: String,
+    title: String,
+    subtitle: String,
+    gradientColors: List<Color>,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .width(160.dp)
+            .height(180.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.linearGradient(gradientColors)
+                )
+                .padding(20.dp)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Emoji icon in a frosted circle
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(emoji, fontSize = 26.sp)
+                }
+
+                Column {
+                    Text(
+                        text = title,
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = subtitle,
+                        color = Color.White.copy(alpha = 0.75f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Normal
+                    )
+                }
             }
         }
     }
@@ -187,9 +248,11 @@ fun MainScreen(
                                 item {
                                     Spacer(modifier = Modifier.height(8.dp))
                                     ConnectToPage3Section(
-                                        onDeviceClick = {
+                                        onRingClick = {
                                             navigator.push(HomeScreenSDK())
-
+                                        },
+                                        onBottleClick = {
+                                            navigator.push(BottleDashboardScreenNav())
                                         }
                                     )
                                     Spacer(modifier = Modifier.height(16.dp))

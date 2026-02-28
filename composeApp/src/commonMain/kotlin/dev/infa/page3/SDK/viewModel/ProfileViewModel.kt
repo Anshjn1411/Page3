@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 /**
@@ -29,7 +30,7 @@ expect class ProfileManager {
     /**
      * Update unit system on device
      */
-    suspend fun updateUnitSystem(unitSystem: UnitSystem): Boolean
+    suspend fun updateUnitSystem(unitSystem: UnitSystem, currentTimeFormat: TimeFormat): Boolean
 
     /**
      * Update time format on device
@@ -141,7 +142,7 @@ class ProfileViewModel(
         viewModelScope.launch {
             try {
                 _isLoading.value = true
-                val success = profileManager.updateUnitSystem(unitSystem)
+                val success = profileManager.updateUnitSystem(unitSystem, _userSettings.value.timeFormat)
 
                 if (success) {
                     _userSettings.value = _userSettings.value.copy(unitSystem = unitSystem)
@@ -236,7 +237,7 @@ class ProfileViewModel(
     fun loadTouchSettings() {
         viewModelScope.launch {
             try {
-                _isLoading.value = false
+                _isLoading.value = true
                 val settings = profileManager.loadTouchSettings()
                 settings?.let {
                     _touchSettings.value = it
@@ -279,4 +280,7 @@ class ProfileViewModel(
         _successMessage.value = null
     }
 
+    fun destroy() {
+        viewModelScope.cancel()
+    }
 }

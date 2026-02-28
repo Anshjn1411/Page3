@@ -25,6 +25,7 @@ import dev.infa.page3.SDK.viewModel.ISyncManager
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
@@ -43,121 +44,144 @@ actual class SyncManager : ISyncManager {
     private val mutex = Mutex()
 
     actual override suspend fun syncTodaySteps(): Int = mutex.withLock {
-        suspendCoroutine { cont ->
-            cmdHandle.executeReqCmd(
-                SimpleKeyReq(Constants.CMD_GET_STEP_TODAY),
-                object : ICommandResponse<TodaySportDataRsp> {
-                    override fun onDataResponse(result: TodaySportDataRsp) {
-                        val steps = if (result.status == BaseRspCmd.RESULT_OK)
-                            result.sportTotal.totalSteps else 0
-                        cont.resume(steps)
+        withTimeout(15_000L) {
+            suspendCancellableCoroutine { cont ->
+                cmdHandle.executeReqCmd(
+                    SimpleKeyReq(Constants.CMD_GET_STEP_TODAY),
+                    object : ICommandResponse<TodaySportDataRsp> {
+                        override fun onDataResponse(result: TodaySportDataRsp) {
+                            if (cont.isActive) {
+                                val steps = if (result.status == BaseRspCmd.RESULT_OK)
+                                    result.sportTotal.totalSteps else 0
+                                cont.resume(steps)
+                            }
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     }
 
     actual override suspend fun syncStepsByOffset(offset: Int): DayStepData = mutex.withLock {
-        suspendCoroutine { cont ->
-            cmdHandle.executeReqCmd(
-                ReadDetailSportDataReq(offset, 0, 95),
-                object : ICommandResponse<ReadDetailSportDataRsp> {
-                    override fun onDataResponse(result: ReadDetailSportDataRsp) {
-                        if (result.status != BaseRspCmd.RESULT_OK) {
-                            cont.resume(DayStepData(getDateForOffset(offset), 0, 0, 0, emptyList()))
-                            return
-                        }
-
-                        val list = result.bleStepDetailses
-                        val data = DayStepData(
-                            date = if (list.isNotEmpty())
-                                "${list.first().year}-${list.first().month}-${list.first().day}"
-                            else getDateForOffset(offset),
-                            totalSteps = list.sumOf { it.walkSteps },
-                            totalCalories = list.sumOf { it.calorie },
-                            totalDistance = list.sumOf { it.distance },
-                            hourlyData = list.map {
-                                val totalMin = it.timeIndex * 15
-                                HourlyStepData(totalMin / 60, it.walkSteps, it.calorie)
+        withTimeout(15_000L) {
+            suspendCancellableCoroutine { cont ->
+                cmdHandle.executeReqCmd(
+                    ReadDetailSportDataReq(offset, 0, 95),
+                    object : ICommandResponse<ReadDetailSportDataRsp> {
+                        override fun onDataResponse(result: ReadDetailSportDataRsp) {
+                            if (!cont.isActive) return
+                            if (result.status != BaseRspCmd.RESULT_OK) {
+                                cont.resume(DayStepData(getDateForOffset(offset), 0, 0, 0, emptyList()))
+                                return
                             }
-                        )
-                        cont.resume(data)
+
+                            val list = result.bleStepDetailses
+                            val data = DayStepData(
+                                date = if (list.isNotEmpty())
+                                    "${list.first().year}-${list.first().month}-${list.first().day}"
+                                else getDateForOffset(offset),
+                                totalSteps = list.sumOf { it.walkSteps },
+                                totalCalories = list.sumOf { it.calorie },
+                                totalDistance = list.sumOf { it.distance },
+                                hourlyData = list.map {
+                                    val totalMin = it.timeIndex * 15
+                                    HourlyStepData(totalMin / 60, it.walkSteps, it.calorie)
+                                }
+                            )
+                            cont.resume(data)
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     }
 
     actual override suspend fun syncHeartRate(offset: Int): HeartRateData = mutex.withLock {
-        suspendCoroutine { cont ->
-            val baseTime = getCurrentTimeWithTimezone()
-            val targetTime = baseTime.toLong() - (offset * 24 * 60 * 60)
+        withTimeout(15_000L) {
+            suspendCancellableCoroutine { cont ->
+                val baseTime = getCurrentTimeWithTimezone()
+                val targetTime = baseTime.toLong() - (offset * 24 * 60 * 60)
 
-            cmdHandle.executeReqCmd(
-                ReadHeartRateReq(targetTime),
-                object : ICommandResponse<ReadHeartRateRsp> {
-                    override fun onDataResponse(result: ReadHeartRateRsp) {
-                        if (result.status != BaseRspCmd.RESULT_OK) {
-                            cont.resume(HeartRateData(getDateForOffset(offset)))
-                            return
-                        }
-
-                        val values = mutableListOf<HeartRateEntry>()
-                        result.getmHeartRateArray()?.forEachIndexed { i, hr ->
-                            if (hr.toInt() > 0) {
-                                values.add(
-                                    HeartRateEntry(
-                                        result.getmUtcTime().toLong() + i * 5 * 60,
-                                        hr.toInt(),
-                                        i * 5
-                                    )
-                                )
+                cmdHandle.executeReqCmd(
+                    ReadHeartRateReq(targetTime),
+                    object : ICommandResponse<ReadHeartRateRsp> {
+                        override fun onDataResponse(result: ReadHeartRateRsp) {
+                            if (!cont.isActive) return
+                            if (result.status != BaseRspCmd.RESULT_OK) {
+                                cont.resume(HeartRateData(getDateForOffset(offset)))
+                                return
                             }
-                        }
 
-                        cont.resume(
-                            HeartRateData(
-                                getDateForOffset(offset),
-                                values,
-                                if (values.isNotEmpty()) values.map { it.heartRate }.average().toInt() else 0,
-                                values.maxOfOrNull { it.heartRate } ?: 0,
-                                values.minOfOrNull { it.heartRate } ?: 0
+                            val values = mutableListOf<HeartRateEntry>()
+                            result.getmHeartRateArray()?.forEachIndexed { i, hr ->
+                                if (hr.toInt() > 0) {
+                                    values.add(
+                                        HeartRateEntry(
+                                            result.getmUtcTime().toLong() + i * 5 * 60,
+                                            hr.toInt(),
+                                            i * 5
+                                        )
+                                    )
+                                }
+                            }
+
+                            cont.resume(
+                                HeartRateData(
+                                    getDateForOffset(offset),
+                                    values,
+                                    if (values.isNotEmpty()) values.map { it.heartRate }.average().toInt() else 0,
+                                    values.maxOfOrNull { it.heartRate } ?: 0,
+                                    values.minOfOrNull { it.heartRate } ?: 0
+                                )
                             )
-                        )
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     }
 
     actual override suspend fun syncSpO2(offset: Int): SpO2Data = mutex.withLock {
-        suspendCoroutine { cont ->
-            largeData.syncBloodOxygenWithCallback { entityList ->
-                if (entityList.isNullOrEmpty()) {
-                    cont.resume(SpO2Data(getDateForOffset(offset)))
-                    return@syncBloodOxygenWithCallback
-                }
+        withTimeout(15_000L) {
+            suspendCancellableCoroutine { cont ->
+                largeData.syncBloodOxygenWithCallback { entityList ->
+                    if (!cont.isActive) return@syncBloodOxygenWithCallback
+                    if (entityList.isNullOrEmpty()) {
+                        cont.resume(SpO2Data(getDateForOffset(offset)))
+                        return@syncBloodOxygenWithCallback
+                    }
 
-                val values = mutableListOf<SpO2Entry>()
-                entityList.forEach { entity ->
-                    val baseTime = resolveBaseTime(entity)
-                    val arr = entity.maxArray ?: entity.minArray ?: emptyList()
-                    arr.forEachIndexed { hour, value ->
-                        if (value in 1..100) {
-                            values.add(SpO2Entry(baseTime / 1000 + hour * 3600, value, hour))
+                    // Filter entities by the target date
+                    val targetDate = getDateForOffset(offset)
+                    val values = mutableListOf<SpO2Entry>()
+                    entityList.forEach { entity ->
+                        val baseTime = resolveBaseTime(entity)
+                        // Check if this entity matches the target date
+                        val entityDate = entity.dateStr ?: run {
+                            val cal = Calendar.getInstance()
+                            cal.timeInMillis = if (baseTime >= 1_000_000_000_000L) baseTime else baseTime * 1000
+                            SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)
+                        }
+                        if (entityDate != targetDate) return@forEach
+
+                        val arr = entity.maxArray ?: entity.minArray ?: emptyList()
+                        arr.forEachIndexed { hour, value ->
+                            if (value in 1..100) {
+                                values.add(SpO2Entry(baseTime / 1000 + hour * 3600, value, hour))
+                            }
                         }
                     }
-                }
 
-                cont.resume(
-                    SpO2Data(
-                        getDateForOffset(offset),
-                        values,
-                        if (values.isNotEmpty()) values.map { it.spo2Value }.average().toInt() else 0,
-                        values.maxOfOrNull { it.spo2Value } ?: 0,
-                        values.minOfOrNull { it.spo2Value } ?: 0
+                    cont.resume(
+                        SpO2Data(
+                            targetDate,
+                            values,
+                            if (values.isNotEmpty()) values.map { it.spo2Value }.average().toInt() else 0,
+                            values.maxOfOrNull { it.spo2Value } ?: 0,
+                            values.minOfOrNull { it.spo2Value } ?: 0
+                        )
                     )
-                )
+                }
             }
         }
     }
@@ -232,132 +256,143 @@ actual class SyncManager : ISyncManager {
 //    }
 
     actual override suspend fun confirmBloodPressureSync() = mutex.withLock {
-        suspendCoroutine<Unit> { cont ->
-            cmdHandle.executeReqCmd(BpReadConformReq(true), object : ICommandResponse<BaseRspCmd> {
-                override fun onDataResponse(result: BaseRspCmd) {
-                    cont.resume(Unit)
-                }
-            })
+        withTimeout(15_000L) {
+            suspendCancellableCoroutine<Unit> { cont ->
+                cmdHandle.executeReqCmd(BpReadConformReq(true), object : ICommandResponse<BaseRspCmd> {
+                    override fun onDataResponse(result: BaseRspCmd) {
+                        if (cont.isActive) cont.resume(Unit)
+                    }
+                })
+            }
         }
     }
 
     actual override suspend fun syncHrv(offset: Int): HrvData = mutex.withLock {
-        suspendCoroutine { cont ->
-            cmdHandle.executeReqCmd(
-                HRVReq(offset.toByte()),
-                object : ICommandResponse<HRVRsp> {
-                    override fun onDataResponse(result: HRVRsp) {
-                        if (result.range <= 0) {
-                            cont.resume(HrvData(getDateForOffset(offset)))
-                            return
-                        }
-
-                        val calendar = Calendar.getInstance()
-                        calendar.add(Calendar.DAY_OF_YEAR, -offset)
-                        calendar.set(Calendar.HOUR_OF_DAY, 0)
-                        calendar.set(Calendar.MINUTE, 0)
-                        calendar.set(Calendar.SECOND, 0)
-                        val baseTimestamp = calendar.timeInMillis / 1000
-
-                        val values = mutableListOf<HrvEntry>()
-                        result.hrvArray?.forEachIndexed { i, hrv ->
-                            val hrvValue = hrv.toInt() and 0xFF
-                            if (hrvValue > 0) {
-                                val intervalMin = result.range.coerceAtLeast(1)
-                                values.add(
-                                    HrvEntry(
-                                        baseTimestamp + i * intervalMin * 60,
-                                        hrvValue,
-                                        i * intervalMin
-                                    )
-                                )
+        withTimeout(15_000L) {
+            suspendCancellableCoroutine { cont ->
+                cmdHandle.executeReqCmd(
+                    HRVReq(offset.toByte()),
+                    object : ICommandResponse<HRVRsp> {
+                        override fun onDataResponse(result: HRVRsp) {
+                            if (!cont.isActive) return
+                            if (result.range <= 0) {
+                                cont.resume(HrvData(getDateForOffset(offset)))
+                                return
                             }
-                        }
-                        cont.resume(
-                            HrvData(
-                                getDateForOffset(offset),
-                                values,
-                                if (values.isNotEmpty()) values.map { it.hrvValue }.average().toInt() else 0,
-                                values.maxOfOrNull { it.hrvValue } ?: 0,
-                                values.minOfOrNull { it.hrvValue } ?: 0
+
+                            val calendar = Calendar.getInstance()
+                            calendar.add(Calendar.DAY_OF_YEAR, -offset)
+                            calendar.set(Calendar.HOUR_OF_DAY, 0)
+                            calendar.set(Calendar.MINUTE, 0)
+                            calendar.set(Calendar.SECOND, 0)
+                            val baseTimestamp = calendar.timeInMillis / 1000
+
+                            val values = mutableListOf<HrvEntry>()
+                            result.hrvArray?.forEachIndexed { i, hrv ->
+                                val hrvValue = hrv.toInt() and 0xFF
+                                if (hrvValue > 0) {
+                                    val intervalMin = result.range.coerceAtLeast(1)
+                                    values.add(
+                                        HrvEntry(
+                                            baseTimestamp + i * intervalMin * 60,
+                                            hrvValue,
+                                            i * intervalMin
+                                        )
+                                    )
+                                }
+                            }
+                            cont.resume(
+                                HrvData(
+                                    getDateForOffset(offset),
+                                    values,
+                                    if (values.isNotEmpty()) values.map { it.hrvValue }.average().toInt() else 0,
+                                    values.maxOfOrNull { it.hrvValue } ?: 0,
+                                    values.minOfOrNull { it.hrvValue } ?: 0
+                                )
                             )
-                        )
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     }
 
     actual override suspend fun syncPressure(offset: Int): PressureData = mutex.withLock {
-        suspendCoroutine { cont ->
-            cmdHandle.executeReqCmd(
-                PressureReq(offset.toByte()),
-                object : ICommandResponse<PressureRsp> {
-                    override fun onDataResponse(result: PressureRsp) {
-                        if (result.pressureArray == null) {
-                            cont.resume(PressureData(getDateForOffset(offset)))
-                            return
-                        }
+        withTimeout(15_000L) {
+            suspendCancellableCoroutine { cont ->
+                cmdHandle.executeReqCmd(
+                    PressureReq(offset.toByte()),
+                    object : ICommandResponse<PressureRsp> {
+                        override fun onDataResponse(result: PressureRsp) {
+                            if (!cont.isActive) return
+                            if (result.pressureArray == null) {
+                                cont.resume(PressureData(getDateForOffset(offset)))
+                                return
+                            }
 
-                        val values = mutableListOf<PressureEntry>()
-                        result.pressureArray.forEachIndexed { i, pressure ->
-                            val pressureValue = (pressure.toInt() and 0xFF) / 10f
-                            if (pressureValue > 0) {
+                            val values = mutableListOf<PressureEntry>()
+                            result.pressureArray.forEachIndexed { i, pressure ->
+                                val pressureValue = (pressure.toInt() and 0xFF) / 10f
+                                if (pressureValue > 0) {
+                                    values.add(
+                                        PressureEntry(
+                                            minuteOfDay = i * result.range,
+                                            pressureValue = pressureValue
+                                        )
+                                    )
+                                }
+                            }
+
+                            cont.resume(
+                                PressureData(
+                                    getDateForOffset(offset),
+                                    values,
+                                    if (values.isNotEmpty())
+                                        values.map { it.pressureValue }.average().toFloat() else 0f
+                                )
+                            )
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    actual override suspend fun syncAutoTemperature(offset: Int): TemperatureData = mutex.withLock {
+        withTimeout(15_000L) {
+            suspendCancellableCoroutine { cont ->
+                fileHandle.clearCallback()
+                fileHandle.registerCallback(object : SimpleCallback() {
+                    override fun onUpdateTemperature(data: TemperatureEntity) {
+                        if (!cont.isActive) return
+                        val values = mutableListOf<TemperatureEntry>()
+
+                        data.mValues?.forEachIndexed { i, temp ->
+                            if (temp > 0) {
                                 values.add(
-                                    PressureEntry(
-                                        minuteOfDay = i * result.range,
-                                        pressureValue = pressureValue
+                                    TemperatureEntry(
+                                        minuteOfDay = i * data.mTimeSpan,
+                                        temperature = temp
                                     )
                                 )
                             }
                         }
 
                         cont.resume(
-                            PressureData(
-                                getDateForOffset(offset),
-                                values,
-                                if (values.isNotEmpty())
-                                    values.map { it.pressureValue }.average().toFloat() else 0f
+                            TemperatureData(
+                                date = getDateForOffset(data.mIndex),
+                                entries = values,
+                                averageTemp = if (values.isNotEmpty())
+                                    values.map { it.temperature }.average().toFloat() else 0f,
+                                maxTemp = values.maxOfOrNull { it.temperature } ?: 0f,
+                                minTemp = values.minOfOrNull { it.temperature } ?: 0f
                             )
                         )
                     }
-                }
-            )
-        }
-    }
-
-    actual override suspend fun syncAutoTemperature(offset: Int): TemperatureData = mutex.withLock {
-        suspendCoroutine { cont ->
-            fileHandle.clearCallback()
-            fileHandle.registerCallback(object : SimpleCallback() {
-                override fun onUpdateTemperature(data: TemperatureEntity) {
-                    val values = mutableListOf<TemperatureEntry>()
-
-                    data.mValues?.forEachIndexed { i, temp ->
-                        if (temp > 0) {
-                            values.add(
-                                TemperatureEntry(
-                                    minuteOfDay = i * data.mTimeSpan,
-                                    temperature = temp
-                                )
-                            )
-                        }
-                    }
-
-                    cont.resume(
-                        TemperatureData(
-                            date = getDateForOffset(data.mIndex),
-                            entries = values,
-                            averageTemp = if (values.isNotEmpty())
-                                values.map { it.temperature }.average().toFloat() else 0f,
-                            maxTemp = values.maxOfOrNull { it.temperature } ?: 0f,
-                            minTemp = values.minOfOrNull { it.temperature } ?: 0f
-                        )
-                    )
-                }
-            })
-            fileHandle.initRegister()
-            fileHandle.startObtainTemperatureSeries(offset)
+                })
+                fileHandle.initRegister()
+                fileHandle.startObtainTemperatureSeries(offset)
+            }
         }
     }
 
@@ -487,13 +522,13 @@ actual class SyncManager : ISyncManager {
 //        }
 //}
 
-    private fun getCurrentTimeWithTimezone(): Int {
+    private fun getCurrentTimeWithTimezone(): Long {
         return try {
             val tzHours = TimeZone.getDefault().rawOffset / (1000 * 60 * 60)
             val currentSec = System.currentTimeMillis() / 1000
-            (tzHours * 3600 + currentSec).toInt()
+            tzHours * 3600L + currentSec
         } catch (e: Exception) {
-            0
+            0L
         }
     }
 
@@ -532,114 +567,152 @@ actual class InstantMeasures : IInstantMeasures {
     // ============ MANUAL MEASUREMENT FUNCTIONS ============
 
     actual override suspend fun measureHeartRate(): String = mutex.withLock {
-        suspendCancellableCoroutine { cont ->
-            val resumed = AtomicBoolean(false)
-            bleOps.manualModeHeart({ result ->
-                val hr = result.value.toInt()
-                val success = result.errCode.toInt() == 0 && hr > 0
-                if (success && cont.isActive && resumed.compareAndSet(false, true)) {
-                    cont.resume("Heart Rate: $hr bpm")
-                }
-            }, false)
+        withTimeout(45_000L) {
+            suspendCancellableCoroutine { cont ->
+                val resumed = AtomicBoolean(false)
+                bleOps.manualModeHeart({ result ->
+                    if (cont.isActive && resumed.compareAndSet(false, true)) {
+                        val hr = result.value.toInt()
+                        val success = result.errCode.toInt() == 0 && hr > 0
+                        if (success) {
+                            cont.resume("Heart Rate: $hr bpm")
+                        } else {
+                            cont.resume("Heart rate measurement failed (code: ${result.errCode})")
+                        }
+                    }
+                }, false)
+            }
         }
     }
 
     actual override suspend fun measureSpO2(): String = mutex.withLock {
-        suspendCancellableCoroutine { cont ->
-            val resumed = AtomicBoolean(false)
-            bleOps.manualModeSpO2({ result ->
-                val spo2 = result.value.toInt()
-                val success = result.errCode.toInt() == 0 && spo2 in 1..100
-                if (success && cont.isActive && resumed.compareAndSet(false, true)) {
-                    cont.resume("SpO2: $spo2%")
-                }
-            }, false)
+        withTimeout(45_000L) {
+            suspendCancellableCoroutine { cont ->
+                val resumed = AtomicBoolean(false)
+                bleOps.manualModeSpO2({ result ->
+                    if (cont.isActive && resumed.compareAndSet(false, true)) {
+                        val spo2 = result.value.toInt()
+                        val success = result.errCode.toInt() == 0 && spo2 in 1..100
+                        if (success) {
+                            cont.resume("SpO2: $spo2%")
+                        } else {
+                            cont.resume("SpO2 measurement failed (code: ${result.errCode})")
+                        }
+                    }
+                }, false)
+            }
         }
     }
 
     actual override suspend fun measureHrv(): String = mutex.withLock {
-        suspendCancellableCoroutine { cont ->
-            val resumed = AtomicBoolean(false)
-            bleOps.manualModeHrv({ result ->
-                val hrv = result.value.toInt()
-                val success = result.errCode.toInt() == 0 && hrv > 0
-                if (success && cont.isActive && resumed.compareAndSet(false, true)) {
-                    cont.resume("HRV: $hrv ms")
-                }
-            }, false)
+        withTimeout(45_000L) {
+            suspendCancellableCoroutine { cont ->
+                val resumed = AtomicBoolean(false)
+                bleOps.manualModeHrv({ result ->
+                    if (cont.isActive && resumed.compareAndSet(false, true)) {
+                        val hrv = result.value.toInt()
+                        val success = result.errCode.toInt() == 0 && hrv > 0
+                        if (success) {
+                            cont.resume("HRV: $hrv ms")
+                        } else {
+                            cont.resume("HRV measurement failed (code: ${result.errCode})")
+                        }
+                    }
+                }, false)
+            }
         }
     }
 
     actual override suspend fun measureBloodPressure(): String = mutex.withLock {
-        suspendCancellableCoroutine { cont ->
-            val resumed = AtomicBoolean(false)
-            bleOps.manualModeBP({ result ->
-                val success = result.errCode.toInt() == 0
-                if (success && cont.isActive && resumed.compareAndSet(false, true)) {
-                    cont.resume(
-                        MeasurementResult(
-                            success = true,
-                            heartRate = result.value.toInt(),
-                            systolic = result.sbp.toInt(),
-                            diastolic = result.dbp.toInt(),
-                            message = "BP: ${result.sbp.toInt()}/${result.dbp.toInt()} mmHg, HR: ${result.value.toInt()} bpm"
-                        ).toString()
-                    )
-                }
-            }, false)
+        withTimeout(45_000L) {
+            suspendCancellableCoroutine { cont ->
+                val resumed = AtomicBoolean(false)
+                bleOps.manualModeBP({ result ->
+                    if (cont.isActive && resumed.compareAndSet(false, true)) {
+                        val success = result.errCode.toInt() == 0
+                        if (success) {
+                            cont.resume(
+                                MeasurementResult(
+                                    success = true,
+                                    heartRate = result.value.toInt(),
+                                    systolic = result.sbp.toInt(),
+                                    diastolic = result.dbp.toInt(),
+                                    message = "BP: ${result.sbp.toInt()}/${result.dbp.toInt()} mmHg, HR: ${result.value.toInt()} bpm"
+                                ).toString()
+                            )
+                        } else {
+                            cont.resume("Blood pressure measurement failed (code: ${result.errCode})")
+                        }
+                    }
+                }, false)
+            }
         }
     }
 
     actual override suspend fun measurePressure(): String = mutex.withLock {
-        suspendCancellableCoroutine { cont ->
-            val resumed = AtomicBoolean(false)
-            bleOps.manualModePressure({ result ->
-                val pressure = result.value.toInt()
-                val success = result.errCode.toInt() == 0 && pressure > 0
-                if (success && cont.isActive && resumed.compareAndSet(false, true)) {
-                    cont.resume("Stress Level: $pressure")
-                }
-            }, false)
+        withTimeout(45_000L) {
+            suspendCancellableCoroutine { cont ->
+                val resumed = AtomicBoolean(false)
+                bleOps.manualModePressure({ result ->
+                    if (cont.isActive && resumed.compareAndSet(false, true)) {
+                        val pressure = result.value.toInt()
+                        val success = result.errCode.toInt() == 0 && pressure > 0
+                        if (success) {
+                            cont.resume("Stress Level: $pressure")
+                        } else {
+                            cont.resume("Stress measurement failed (code: ${result.errCode})")
+                        }
+                    }
+                }, false)
+            }
         }
     }
 
     actual override suspend fun measureTemperature(): String = mutex.withLock {
-        suspendCancellableCoroutine { cont ->
-            val resumed = AtomicBoolean(false)
-            bleOps.manualTemperature({ result ->
-                val temp = result.value.toInt() / 10f
-                val success = result.errCode.toInt() == 0 && temp > 0
-                if (success && cont.isActive && resumed.compareAndSet(false, true)) {
-                    cont.resume("Temperature: ${temp}°C")
-                }
-            }, false)
+        withTimeout(45_000L) {
+            suspendCancellableCoroutine { cont ->
+                val resumed = AtomicBoolean(false)
+                bleOps.manualTemperature({ result ->
+                    if (cont.isActive && resumed.compareAndSet(false, true)) {
+                        val temp = result.value.toInt() / 10f
+                        val success = result.errCode.toInt() == 0 && temp > 0
+                        if (success) {
+                            cont.resume("Temperature: ${temp}°C")
+                        } else {
+                            cont.resume("Temperature measurement failed (code: ${result.errCode})")
+                        }
+                    }
+                }, false)
+            }
         }
     }
 
     // ============ ONE-KEY MEASUREMENT (LEGACY - SINGLE RESULT) ============
     actual override suspend fun measureOneClick(): OneClickResult = mutex.withLock {
-        suspendCancellableCoroutine { cont ->
-            val resumed = AtomicBoolean(false)
-            bleOps.oneClickMeasurement({ result ->
-                val isComplete = result.heartRate > 0 &&
-                        result.bloodOxygen in 1..100 &&
-                        result.sbp > 0 && result.dbp > 0
+        withTimeout(45_000L) {
+            suspendCancellableCoroutine { cont ->
+                val resumed = AtomicBoolean(false)
+                bleOps.oneClickMeasurement({ result ->
+                    val isComplete = result.heartRate > 0 &&
+                            result.bloodOxygen in 1..100 &&
+                            result.sbp > 0 && result.dbp > 0
 
-                if (isComplete && cont.isActive && resumed.compareAndSet(false, true)) {
-                    cont.resume(
-                        OneClickResult(
-                            heartRate = result.heartRate,
-                            bloodOxygen = result.bloodOxygen,
-                            systolic = result.sbp,
-                            diastolic = result.dbp,
-                            hrv = result.hrv,
-                            stress = result.stress,
-                            temperature = result.temperature / 10f,
-                            rri = result.rri
+                    if (isComplete && cont.isActive && resumed.compareAndSet(false, true)) {
+                        cont.resume(
+                            OneClickResult(
+                                heartRate = result.heartRate,
+                                bloodOxygen = result.bloodOxygen,
+                                systolic = result.sbp,
+                                diastolic = result.dbp,
+                                hrv = result.hrv,
+                                stress = result.stress,
+                                temperature = result.temperature / 10f,
+                                rri = result.rri
+                            )
                         )
-                    )
-                }
-            }, false)
+                    }
+                }, false)
+            }
         }
     }
 
@@ -649,89 +722,95 @@ actual class InstantMeasures : IInstantMeasures {
         onComplete: () -> Unit
     ) = mutex.withLock {
         Log.d("One-Click-Key-mesurmenst" ,"start")
-        suspendCancellableCoroutine { cont ->
-            var isComplete = false
+        withTimeout(45_000L) {
+            suspendCancellableCoroutine { cont ->
+                var isComplete = false
 
-            bleOps.oneClickMeasurement({ result ->
-                if (!isComplete) {
-                    // Convert device result to OneClickResult
-                    val currentResult = OneClickResult(
-                        heartRate = result.heartRate,
-                        bloodOxygen = result.bloodOxygen,
-                        systolic = result.sbp,
-                        diastolic = result.dbp,
-                        hrv = result.hrv,
-                        stress = result.stress,
-                        temperature = result.temperature / 10f,
-                        rri = result.rri
-                    )
+                bleOps.oneClickMeasurement({ result ->
+                    if (!isComplete) {
+                        // Convert device result to OneClickResult
+                        val currentResult = OneClickResult(
+                            heartRate = result.heartRate,
+                            bloodOxygen = result.bloodOxygen,
+                            systolic = result.sbp,
+                            diastolic = result.dbp,
+                            hrv = result.hrv,
+                            stress = result.stress,
+                            temperature = result.temperature / 10f,
+                            rri = result.rri
+                        )
 
-                    // Send update to UI (even if some values are still 0)
-                    onUpdate(currentResult)
+                        // Send update to UI (even if some values are still 0)
+                        onUpdate(currentResult)
 
-                    // Check if measurement is complete
-                    val allValuesReady = result.heartRate > 0 &&
-                            result.bloodOxygen in 1..100 &&
-                            result.sbp > 0 &&
-                            result.dbp > 0 &&
-                            result.temperature > 0
+                        // Check if measurement is complete
+                        val allValuesReady = result.heartRate > 0 &&
+                                result.bloodOxygen in 1..100 &&
+                                result.sbp > 0 &&
+                                result.dbp > 0 &&
+                                result.temperature > 0
 
-                    if (allValuesReady && cont.isActive) {
-                        isComplete = true
-                        onComplete()
-                        cont.resume(Unit)
+                        if (allValuesReady && cont.isActive) {
+                            isComplete = true
+                            onComplete()
+                            cont.resume(Unit)
+                        }
                     }
-                }
-            }, false)
+                }, false)
+            }
         }
     }
 
     actual override suspend fun measureHeartRateRawData(seconds: Int): RawDataResult = mutex.withLock {
-        suspendCancellableCoroutine { cont ->
-            val resumed = AtomicBoolean(false)
-            bleOps.manualModeHeartRateRawData({ result ->
-                if (cont.isActive && resumed.compareAndSet(false, true)) {
-                    cont.resume(
-                        RawDataResult(
-                            heartRate = result.heartRate,
-                            hrv = result.hrv,
-                            stress = result.stress,
-                            ppgCount = result.ppgCount,
-                            greenLightPpgL = result.greenLightPpgL,
-                            greenLightPpgH = result.greenLightPpgH,
-                            xL = result.xl,
-                            xH = result.xh,
-                            yL = result.yl,
-                            yH = result.yh,
-                            zL = result.zl,
-                            zH = result.zh
+        withTimeout(45_000L) {
+            suspendCancellableCoroutine { cont ->
+                val resumed = AtomicBoolean(false)
+                bleOps.manualModeHeartRateRawData({ result ->
+                    if (cont.isActive && resumed.compareAndSet(false, true)) {
+                        cont.resume(
+                            RawDataResult(
+                                heartRate = result.heartRate,
+                                hrv = result.hrv,
+                                stress = result.stress,
+                                ppgCount = result.ppgCount,
+                                greenLightPpgL = result.greenLightPpgL,
+                                greenLightPpgH = result.greenLightPpgH,
+                                xL = result.xl,
+                                xH = result.xh,
+                                yL = result.yl,
+                                yH = result.yh,
+                                zL = result.zl,
+                                zH = result.zh
+                            )
                         )
-                    )
-                }
-            }, seconds, false)
+                    }
+                }, seconds, false)
+            }
         }
     }
 
     actual override suspend fun measureBloodOxygenRawData(seconds: Int): RawDataResult = mutex.withLock {
-        suspendCancellableCoroutine { cont ->
-            val resumed = AtomicBoolean(false)
-            bleOps.manualModeBloodOxygenRawData({ result ->
-                if (cont.isActive && resumed.compareAndSet(false, true)) {
-                    cont.resume(
-                        RawDataResult(
-                            bloodOxygen = result.bloodOxygen,
-                            heartRate = result.heartRate,
-                            ppgCount = result.ppgCount,
-                            redLightPpgL = result.redLightPpgL,
-                            redLightPpgH = result.redLightPpgH,
-                            infraredPpgL = result.infraredPpgL,
-                            infraredPpgH = result.infraredPpgH,
-                            greenLightPpgL = result.greenLightPpgL,
-                            greenLightPpgH = result.greenLightPpgH
+        withTimeout(45_000L) {
+            suspendCancellableCoroutine { cont ->
+                val resumed = AtomicBoolean(false)
+                bleOps.manualModeBloodOxygenRawData({ result ->
+                    if (cont.isActive && resumed.compareAndSet(false, true)) {
+                        cont.resume(
+                            RawDataResult(
+                                bloodOxygen = result.bloodOxygen,
+                                heartRate = result.heartRate,
+                                ppgCount = result.ppgCount,
+                                redLightPpgL = result.redLightPpgL,
+                                redLightPpgH = result.redLightPpgH,
+                                infraredPpgL = result.infraredPpgL,
+                                infraredPpgH = result.infraredPpgH,
+                                greenLightPpgL = result.greenLightPpgL,
+                                greenLightPpgH = result.greenLightPpgH
+                            )
                         )
-                    )
-                }
-            }, seconds, false)
+                    }
+                }, seconds, false)
+            }
         }
     }
 }
@@ -742,83 +821,95 @@ actual class ContinuousMonitoring : IContinuousMonitoring {
     private val mutex = Mutex()
 
     actual override suspend fun toggleHeartRateMonitoring(enabled: Boolean, interval: Int): String = mutex.withLock {
-        suspendCoroutine { cont ->
-            val validInterval = when {
-                interval in listOf(10, 15, 20, 30, 60) -> interval
-                else -> 30
-            }
-
-            cmdHandle.executeReqCmd(
-                HeartRateSettingReq.getWriteInstance(enabled, validInterval),
-                object : ICommandResponse<HeartRateSettingRsp> {
-                    override fun onDataResponse(result: HeartRateSettingRsp) {
-                        val status = if (result.status == BaseRspCmd.RESULT_OK) {
-                            if (enabled) "enabled with $validInterval min interval"
-                            else "disabled"
-                        } else "failed"
-                        cont.resume("Heart rate monitoring $status")
-                    }
+        withTimeout(15_000L) {
+            suspendCancellableCoroutine { cont ->
+                val validInterval = when {
+                    interval in listOf(10, 15, 20, 30, 60) -> interval
+                    else -> 30
                 }
-            )
+
+                cmdHandle.executeReqCmd(
+                    HeartRateSettingReq.getWriteInstance(enabled, validInterval),
+                    object : ICommandResponse<HeartRateSettingRsp> {
+                        override fun onDataResponse(result: HeartRateSettingRsp) {
+                            if (!cont.isActive) return
+                            val status = if (result.status == BaseRspCmd.RESULT_OK) {
+                                if (enabled) "enabled with $validInterval min interval"
+                                else "disabled"
+                            } else "failed"
+                            cont.resume("Heart rate monitoring $status")
+                        }
+                    }
+                )
+            }
         }
     }
 
     actual override suspend fun toggleHrvMonitoring(enabled: Boolean, interval: Int): String = mutex.withLock {
-        suspendCoroutine { cont ->
-            val request = if (interval > 0) {
-                HrvSettingReq(enabled)
-            } else {
-                HrvSettingReq(enabled)
-            }
-
-            cmdHandle.executeReqCmd(
-                request,
-                object : ICommandResponse<HRVSettingRsp> {
-                    override fun onDataResponse(result: HRVSettingRsp) {
-                        val status = if (result.status == BaseRspCmd.RESULT_OK) {
-                            if (enabled && interval > 0) "enabled with $interval min interval"
-                            else if (enabled) "enabled"
-                            else "disabled"
-                        } else "failed"
-                        cont.resume("HRV monitoring $status")
-                    }
+        withTimeout(15_000L) {
+            suspendCancellableCoroutine { cont ->
+                val request = if (interval > 0) {
+                    HrvSettingReq(enabled)
+                } else {
+                    HrvSettingReq(enabled)
                 }
-            )
+
+                cmdHandle.executeReqCmd(
+                    request,
+                    object : ICommandResponse<HRVSettingRsp> {
+                        override fun onDataResponse(result: HRVSettingRsp) {
+                            if (!cont.isActive) return
+                            val status = if (result.status == BaseRspCmd.RESULT_OK) {
+                                if (enabled && interval > 0) "enabled with $interval min interval"
+                                else if (enabled) "enabled"
+                                else "disabled"
+                            } else "failed"
+                            cont.resume("HRV monitoring $status")
+                        }
+                    }
+                )
+            }
         }
     }
 
     actual override suspend fun toggleSpO2Monitoring(enabled: Boolean, interval: Int): String = mutex.withLock {
-        suspendCoroutine { cont ->
-            val request = BloodOxygenSettingReq.getWriteInstance(enabled)
+        withTimeout(15_000L) {
+            suspendCancellableCoroutine { cont ->
+                val request = BloodOxygenSettingReq.getWriteInstance(enabled)
 
-            cmdHandle.executeReqCmd(
-                request,
-                object : ICommandResponse<BloodOxygenSettingRsp> {
-                    override fun onDataResponse(result: BloodOxygenSettingRsp) {
-                        val status = if (result.status == BaseRspCmd.RESULT_OK) {
-                            if (enabled) "enabled" else "disabled"
-                        } else "failed"
-                        cont.resume("SpO2 monitoring $status")
+                cmdHandle.executeReqCmd(
+                    request,
+                    object : ICommandResponse<BloodOxygenSettingRsp> {
+                        override fun onDataResponse(result: BloodOxygenSettingRsp) {
+                            if (!cont.isActive) return
+                            val status = if (result.status == BaseRspCmd.RESULT_OK) {
+                                if (enabled) "enabled" else "disabled"
+                            } else "failed"
+                            cont.resume("SpO2 monitoring $status")
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     }
 
     actual override suspend fun toggleIntervalSpO2Monitoring(enabled: Boolean, interval: Int): String = mutex.withLock {
-        suspendCoroutine { cont ->
-            cmdHandle.executeReqCmd(
-                BloodOxygenSettingReq.getWriteInstance(enabled),
-                object : ICommandResponse<BloodOxygenSettingRsp> {
-                    override fun onDataResponse(result: BloodOxygenSettingRsp) {
-                        val status = if (result.status == BaseRspCmd.RESULT_OK) {
-                            if (enabled) "enabled with $interval min interval"
-                            else "disabled"
-                        } else "failed"
-                        cont.resume("Interval SpO2 monitoring $status")
+        withTimeout(15_000L) {
+            suspendCancellableCoroutine { cont ->
+                cmdHandle.executeReqCmd(
+                    BloodOxygenSettingReq.getWriteInstance(enabled),
+                    object : ICommandResponse<BloodOxygenSettingRsp> {
+                        override fun onDataResponse(result: BloodOxygenSettingRsp) {
+                            if (!cont.isActive) return
+                            val status = if (result.status == BaseRspCmd.RESULT_OK) {
+                                if (enabled) "enabled with $interval min interval"
+                                else "disabled"
+                            } else "failed"
+                            cont.resume("Interval SpO2 monitoring $status")
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     }
 
@@ -827,56 +918,65 @@ actual class ContinuousMonitoring : IContinuousMonitoring {
         startEndTime: dev.infa.page3.SDK.data.StartEndTimeEntity,
         interval: Int
     ): String = mutex.withLock {
-        suspendCoroutine { cont ->
-            val multiple = if (interval > 0) interval else 60
+        withTimeout(15_000L) {
+            suspendCancellableCoroutine { cont ->
+                val multiple = if (interval > 0) interval else 60
 
-            cmdHandle.executeReqCmd(
-                BpSettingReq.getWriteInstance(enabled, startEndTime as StartEndTimeEntity, multiple),
-                object : ICommandResponse<BpSettingRsp> {
-                    override fun onDataResponse(result: BpSettingRsp) {
-                        val status = if (result.status == BaseRspCmd.RESULT_OK) {
-                            if (enabled) "enabled with $multiple min interval"
-                            else "disabled"
-                        } else "failed"
-                        cont.resume("Blood pressure monitoring $status")
+                cmdHandle.executeReqCmd(
+                    BpSettingReq.getWriteInstance(enabled, startEndTime as StartEndTimeEntity, multiple),
+                    object : ICommandResponse<BpSettingRsp> {
+                        override fun onDataResponse(result: BpSettingRsp) {
+                            if (!cont.isActive) return
+                            val status = if (result.status == BaseRspCmd.RESULT_OK) {
+                                if (enabled) "enabled with $multiple min interval"
+                                else "disabled"
+                            } else "failed"
+                            cont.resume("Blood pressure monitoring $status")
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     }
 
     actual override suspend fun togglePressureMonitoring(enabled: Boolean): String = mutex.withLock {
-        suspendCoroutine { cont ->
-            cmdHandle.executeReqCmd(
-                PressureSettingReq.getWriteInstance(enabled),
-                object : ICommandResponse<PressureSettingRsp> {
-                    override fun onDataResponse(result: PressureSettingRsp) {
-                        val status = if (result.status == BaseRspCmd.RESULT_OK) {
-                            if (enabled) "enabled" else "disabled"
-                        } else "failed"
-                        cont.resume("Stress monitoring $status")
+        withTimeout(15_000L) {
+            suspendCancellableCoroutine { cont ->
+                cmdHandle.executeReqCmd(
+                    PressureSettingReq.getWriteInstance(enabled),
+                    object : ICommandResponse<PressureSettingRsp> {
+                        override fun onDataResponse(result: PressureSettingRsp) {
+                            if (!cont.isActive) return
+                            val status = if (result.status == BaseRspCmd.RESULT_OK) {
+                                if (enabled) "enabled" else "disabled"
+                            } else "failed"
+                            cont.resume("Stress monitoring $status")
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     }
 
     actual override suspend fun toggleTemperatureMonitoring(enabled: Boolean, interval: Int): String = mutex.withLock {
-        suspendCoroutine { cont ->
-            val validInterval = interval.coerceIn(2, 120)
+        withTimeout(15_000L) {
+            suspendCancellableCoroutine { cont ->
+                val validInterval = interval.coerceIn(2, 120)
 
-            cmdHandle.executeReqCmd(
-                SugarLipidsSettingReq.getWriteInstance(0x03, enabled, validInterval),
-                object : ICommandResponse<BloodSugarLipidsSettingRsp> {
-                    override fun onDataResponse(result: BloodSugarLipidsSettingRsp) {
-                        val status = if (result.status == BaseRspCmd.RESULT_OK) {
-                            if (enabled) "enabled with $validInterval sec interval"
-                            else "disabled"
-                        } else "failed"
-                        cont.resume("Temperature monitoring $status")
+                cmdHandle.executeReqCmd(
+                    SugarLipidsSettingReq.getWriteInstance(0x03, enabled, validInterval),
+                    object : ICommandResponse<BloodSugarLipidsSettingRsp> {
+                        override fun onDataResponse(result: BloodSugarLipidsSettingRsp) {
+                            if (!cont.isActive) return
+                            val status = if (result.status == BaseRspCmd.RESULT_OK) {
+                                if (enabled) "enabled with $validInterval sec interval"
+                                else "disabled"
+                            } else "failed"
+                            cont.resume("Temperature monitoring $status")
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     }
 }

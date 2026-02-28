@@ -6,9 +6,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Shared ViewModel for the SGUAI-T30 Smart Bottle.
@@ -41,10 +46,27 @@ class BottleViewModel(
     val lastCommandSuccess: StateFlow<Boolean?> = syncManager.lastCommandSuccess
     val logs: StateFlow<List<String>> = syncManager.logs
 
+    /**
+     * Today's total water intake in mL, computed from drinking records.
+     * Uses SharingStarted.Eagerly so the combine always runs —
+     * never misses BLE responses that arrive before the UI subscribes.
+     */
+    val todayTotalIntake: StateFlow<Int> = combine(
+        syncManager.drinkingRecords,
+        syncManager.waterLevelMl
+    ) { records, liveLevel ->
+        val recordSum = records.sumOf { it.waterIntakeMl }
+        if (recordSum > 0) recordSum else (liveLevel ?: 0)
+    }.stateIn(scope, SharingStarted.Eagerly, 0)
+
     // ─── UI-specific state ──────────────────────────────────────────────────────
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    /** True while syncing data from bottle after connection */
+    private val _isSyncing = MutableStateFlow(false)
+    val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
@@ -67,6 +89,7 @@ class BottleViewModel(
     }
 
     fun disconnect() {
+        _isSyncing.value = false
         syncManager.disconnect()
     }
 
@@ -74,6 +97,7 @@ class BottleViewModel(
 
     fun fetchAllSettings() {
         scope.launch {
+            _isSyncing.value = true
             _isLoading.value = true
             try {
                 syncManager.requestBatteryLevel()
@@ -86,10 +110,18 @@ class BottleViewModel(
                 syncManager.requestDoNotDisturb()
                 syncManager.requestGradientOption()
                 syncManager.requestReminderLight()
+                syncManager.requestDrinkingRecordData(0) // Fetch today's records
+
+                // Wait for today's records to actually arrive from the device
+                // (commands are non-blocking; data arrives async via GATT callbacks)
+                withTimeoutOrNull(8000L) {
+                    syncManager.drinkingRecords.first { it.isNotEmpty() }
+                }
             } catch (e: Exception) {
                 _errorMessage.value = "Failed to fetch settings: ${e.message}"
             } finally {
                 _isLoading.value = false
+                _isSyncing.value = false
             }
         }
     }

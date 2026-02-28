@@ -64,13 +64,25 @@ fun DashboardScreen(
 
     var currentTab by remember { mutableStateOf(BottomTab.HOME) }
 
+    // Guard: only fetch capabilities once per connection
+    var capsFetched by remember { mutableStateOf(false) }
+
     LaunchedEffect(isConnected) {
         if(isConnected){
             homeViewModel.getBatteryLevel()
-            homeViewModel.fetchDeviceCapabilities()
-            if(!autoSyncCompleted){
-                syncViewModel.startAutoSync()
+            if (!capsFetched) {
+                homeViewModel.fetchDeviceCapabilities()
+                capsFetched = true
             }
+        } else {
+            capsFetched = false  // reset on disconnect
+        }
+    }
+
+    // Start auto-sync once capabilities are available
+    LaunchedEffect(isConnected, deviceCapabilities) {
+        if (isConnected && !autoSyncCompleted && deviceCapabilities != null) {
+            syncViewModel.startAutoSync(deviceCapabilities)
         }
     }
 

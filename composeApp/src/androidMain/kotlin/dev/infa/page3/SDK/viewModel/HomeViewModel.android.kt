@@ -43,6 +43,7 @@ actual class HomeManager {
     private var lastStartTimestamp: Long = 0
 
     private var tickJob: Job? = null
+    private val timerScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var onExerciseUpdate: ((ExerciseData) -> Unit)? = null
     private var onExerciseEnded: ((ExerciseSummary) -> Unit)? = null
     private var onError: ((String) -> Unit)? = null
@@ -132,86 +133,91 @@ actual class HomeManager {
         }
 
     actual suspend fun fetchDeviceCapabilities(): DeviceCapabilities? =
-        suspendCancellableCoroutine { continuation ->
+        withTimeout(15_000L) {
+            suspendCancellableCoroutine { continuation ->
 
-            var timeRsp: SetTimeRsp? = null
-            var funcRsp: DeviceSupportFunctionRsp? = null
-            var resumed = false
+                var timeRsp: SetTimeRsp? = null
+                var funcRsp: DeviceSupportFunctionRsp? = null
+                var resumed = false
 
-            fun tryResume() {
-                if (resumed || timeRsp == null || funcRsp == null) return
-                resumed = true
+                fun tryResume() {
+                    if (resumed || timeRsp == null || funcRsp == null) return
+                    resumed = true
 
-                val t = timeRsp!!
-                val f = funcRsp!!
+                    val t = timeRsp!!
+                    val f = funcRsp!!
 
-                continuation.resume(
-                    DeviceCapabilities(
+                    continuation.resume(
+                        DeviceCapabilities(
 
-                        // Health
-                        hasHeartRate = true, // baseline supported
-                        hasSpO2 = t.mSupportBloodOxygen,
-                        hasHRV = t.mSupportHrv,
-                        hasBloodPressure = t.mSupportBloodPressure,
-                        hasBodyTemperature = t.mSupportTemperature,
-                        hasFatigue = t.mSupportFeature,
-                        hasOneKeyCheck = t.mSupportOneKeyCheck,
+                            // Health
+                            hasHeartRate = true, // baseline supported
+                            hasSpO2 = t.mSupportBloodOxygen,
+                            hasHRV = t.mSupportHrv,
+                            hasBloodPressure = t.mSupportBloodPressure,
+                            hasBodyTemperature = t.mSupportTemperature,
+                            hasFatigue = t.mSupportFeature,
+                            hasOneKeyCheck = t.mSupportOneKeyCheck,
 
-                        // Activity & Sleep
-                        hasSleepTracking = t.mNewSleepProtocol,
-                        hasExerciseMode = true,
+                            // Activity & Sleep
+                            hasSleepTracking = t.mNewSleepProtocol,
+                            hasExerciseMode = true,
 
-                        // Watch & System
-                        supportsWatchFace = t.mSupportPlate,
-                        supportsCustomWatchFace = t.mSupportCustomWallpaper,
-                        maxWatchFaces = t.mMaxWatchFace,
-                        supportsWeather = t.mSupportWeather,
-                        supportsMenstruation = t.mSupportMenstruation,
+                            // Watch & System
+                            supportsWatchFace = t.mSupportPlate,
+                            supportsCustomWatchFace = t.mSupportCustomWallpaper,
+                            maxWatchFaces = t.mMaxWatchFace,
+                            supportsWeather = t.mSupportWeather,
+                            supportsMenstruation = t.mSupportMenstruation,
 
-                        // Functional
-                        supportsTouch = f.supportTouch,
-                        supportsGesture = f.supportGesture,
-                        supportsBlePairing = f.supportBlePair,
-                        supportsHeartRateCalibration = f.supportAPPRevision,
+                            // Functional
+                            supportsTouch = f.supportTouch,
+                            supportsGesture = f.supportGesture,
+                            supportsBlePairing = f.supportBlePair,
+                            supportsHeartRateCalibration = f.supportAPPRevision,
 
-                        // Ring / App
-                        supportsMusic = f.supportRingMusic,
-                        supportsVideo = f.supportRingVideo,
-                        supportsEbook = f.supportRingEbook,
-                        supportsCamera = f.supportRingCamera,
-                        supportsPhoneCall = f.supportRingPhoneCall,
-                        supportsGame = f.supportRingGame,
-                        supportsMuslimMode = f.supportMoslin
+                            // Ring / App
+                            supportsMusic = f.supportRingMusic,
+                            supportsVideo = f.supportRingVideo,
+                            supportsEbook = f.supportRingEbook,
+                            supportsCamera = f.supportRingCamera,
+                            supportsPhoneCall = f.supportRingPhoneCall,
+                            supportsGame = f.supportRingGame,
+                            supportsMuslimMode = f.supportMoslin
+                        )
                     )
+                }
+
+                // 1️⃣ Set Time + Health Capabilities
+                CommandHandle.getInstance().executeReqCmd(
+                    SetTimeReq(0),
+                    object : ICommandResponse<SetTimeRsp> {
+                        override fun onDataResponse(rsp: SetTimeRsp) {
+                            if (rsp.status != BaseRspCmd.RESULT_OK || !continuation.isActive) {
+                                if (!resumed && continuation.isActive) {
+                                    resumed = true
+                                    continuation.resume(null)
+                                }
+                                return
+                            }
+                            timeRsp = rsp
+                            tryResume()
+                        }
+                    }
+                )
+
+                // 2️⃣ Functional Capabilities
+                CommandHandle.getInstance().executeReqCmd(
+                    DeviceSupportReq.getReadInstance(),
+                    object : ICommandResponse<DeviceSupportFunctionRsp> {
+                        override fun onDataResponse(rsp: DeviceSupportFunctionRsp) {
+                            if (!continuation.isActive) return
+                            funcRsp = rsp
+                            tryResume()
+                        }
+                    }
                 )
             }
-
-            // 1️⃣ Set Time + Health Capabilities
-            CommandHandle.getInstance().executeReqCmd(
-                SetTimeReq(0),
-                object : ICommandResponse<SetTimeRsp> {
-                    override fun onDataResponse(rsp: SetTimeRsp) {
-                        if (rsp.status != BaseRspCmd.RESULT_OK || continuation.isCompleted) {
-                            if (!resumed) continuation.resume(null)
-                            return
-                        }
-                        timeRsp = rsp
-                        tryResume()
-                    }
-                }
-            )
-
-            // 2️⃣ Functional Capabilities
-            CommandHandle.getInstance().executeReqCmd(
-                DeviceSupportReq.getReadInstance(),
-                object : ICommandResponse<DeviceSupportFunctionRsp> {
-                    override fun onDataResponse(rsp: DeviceSupportFunctionRsp) {
-                        if (continuation.isCompleted) return
-                        funcRsp = rsp
-                        tryResume()
-                    }
-                }
-            )
         }
 
 
@@ -222,21 +228,25 @@ actual class HomeManager {
         distanceGoal: Int,
         sportMinuteGoal: Int,
         sleepMinuteGoal: Int
-    ): Boolean = suspendCoroutine { continuation ->
-        commandHandle.executeReqCmd(
-            TargetSettingReq.getWriteInstance(
-                stepGoal,
-                calorieGoal * 1000,
-                distanceGoal,
-                sportMinuteGoal,
-                sleepMinuteGoal
-            ),
-            object : ICommandResponse<BaseRspCmd> {
-                override fun onDataResponse(resultEntity: BaseRspCmd) {
-                    continuation.resume(resultEntity.status == BaseRspCmd.RESULT_OK)
+    ): Boolean = withTimeout(15_000L) {
+        suspendCancellableCoroutine { continuation ->
+            commandHandle.executeReqCmd(
+                TargetSettingReq.getWriteInstance(
+                    stepGoal,
+                    calorieGoal * 1000,
+                    distanceGoal,
+                    sportMinuteGoal,
+                    sleepMinuteGoal
+                ),
+                object : ICommandResponse<BaseRspCmd> {
+                    override fun onDataResponse(resultEntity: BaseRspCmd) {
+                        if (continuation.isActive) {
+                            continuation.resume(resultEntity.status == BaseRspCmd.RESULT_OK)
+                        }
+                    }
                 }
-            }
-        )
+            )
+        }
     }
 
     actual fun startExercise(
@@ -323,7 +333,7 @@ actual class HomeManager {
     // Private helpers
     private fun startTimer() {
         tickJob?.cancel()
-        tickJob = CoroutineScope(Dispatchers.Main).launch {
+        tickJob = timerScope.launch {
             while (isExercisingFlag) {
                 delay(1000)
                 if (!isPausedFlag) {

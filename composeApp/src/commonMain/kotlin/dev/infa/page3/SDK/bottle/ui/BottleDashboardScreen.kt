@@ -51,11 +51,13 @@ fun BottleDashboardScreen(
     val connectionState by viewModel.connectionState.collectAsState()
     val batteryStatus by viewModel.batteryStatus.collectAsState()
     val firmwareVersion by viewModel.firmwareVersion.collectAsState()
-    val waterLevel by viewModel.waterLevelMl.collectAsState()
+    val todayIntake by viewModel.todayTotalIntake.collectAsState()
     val waterTemp by viewModel.waterTemperature.collectAsState()
     val waterTarget by viewModel.waterIntakeTarget.collectAsState()
     val currentDrink by viewModel.currentDrink.collectAsState()
     val devices by viewModel.devices.collectAsState()
+    val waterLevel by viewModel.waterLevelMl.collectAsState()
+    val isSyncing by viewModel.isSyncing.collectAsState()
     val isConnected = connectionState == "CONNECTED"
 
     // Fetch all settings when connected
@@ -95,11 +97,12 @@ fun BottleDashboardScreen(
                 item {
                     Spacer(Modifier.height(8.dp))
                     HeroStatusCard(
-                        waterLevel = waterLevel ?: 0,
+                        todayIntake = todayIntake,
                         temperature = waterTemp ?: 0,
                         targetMl = waterTarget ?: 2000,
                         batteryText = batteryStatus ?: "—",
-                        firmwareVersion = firmwareVersion ?: "—"
+                        firmwareVersion = firmwareVersion ?: "—",
+                        isSyncing = isSyncing
                     )
                 }
 
@@ -215,13 +218,14 @@ private fun BottleTopBar(
 
 @Composable
 private fun HeroStatusCard(
-    waterLevel: Int,
+    todayIntake: Int,
     temperature: Int,
     targetMl: Int,
     batteryText: String,
-    firmwareVersion: String
+    firmwareVersion: String,
+    isSyncing: Boolean = false
 ) {
-    val progress = if (targetMl > 0) (waterLevel.toFloat() / targetMl).coerceIn(0f, 1f) else 0f
+    val progress = if (targetMl > 0) (todayIntake.toFloat() / targetMl).coerceIn(0f, 1f) else 0f
 
     val animProgress = remember { Animatable(0f) }
     LaunchedEffect(progress) {
@@ -265,35 +269,54 @@ private fun HeroStatusCard(
                         style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
                     )
 
-                    // Progress arc
-                    drawArc(
-                        brush = Brush.sweepGradient(
-                            listOf(BottleCyan, BottleBlue, BottleBlueDark)
-                        ),
-                        startAngle = -90f,
-                        sweepAngle = 360f * animProgress.value,
-                        useCenter = false,
-                        topLeft = Offset(center.x - radius, center.y - radius),
-                        size = Size(radius * 2, radius * 2),
-                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-                    )
+                    // Progress arc (only when not syncing)
+                    if (!isSyncing) {
+                        drawArc(
+                            brush = Brush.sweepGradient(
+                                listOf(BottleCyan, BottleBlue, BottleBlueDark)
+                            ),
+                            startAngle = -90f,
+                            sweepAngle = 360f * animProgress.value,
+                            useCenter = false,
+                            topLeft = Offset(center.x - radius, center.y - radius),
+                            size = Size(radius * 2, radius * 2),
+                            style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                        )
+                    }
                 }
 
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "💧",
-                        fontSize = 28.sp
-                    )
-                    Text(
-                        text = "${waterLevel}",
-                        color = AppColors.TextPrimary,
-                        style = AppTypography.DisplaySmall
-                    )
-                    Text(
-                        text = "/ ${targetMl} mL",
-                        color = AppColors.TextSecondary,
-                        style = AppTypography.LabelMedium
-                    )
+                if (isSyncing) {
+                    // Syncing indicator
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(36.dp),
+                            color = BottleBlue,
+                            strokeWidth = 3.dp
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            text = "Syncing data…",
+                            color = BottleBlue,
+                            style = AppTypography.LabelMedium
+                        )
+                    }
+                } else {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "💧",
+                            fontSize = 28.sp
+                        )
+                        Text(
+                            text = "${todayIntake}",
+                            color = AppColors.TextPrimary,
+                            style = AppTypography.DisplaySmall
+                        )
+                        Text(
+                            text = "/ ${targetMl} mL",
+                            color = AppColors.TextSecondary,
+                            style = AppTypography.LabelMedium
+                        )
+                    }
                 }
             }
 
