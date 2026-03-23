@@ -1,4 +1,5 @@
 package dev.infa.page3.ui
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -67,6 +68,7 @@ import dev.infa.page3.presentation.viewModel.CategoryViewModel
 import dev.infa.page3.presentation.viewModel.ProductViewModel
 import dev.infa.page3.presentation.viewmodel.WishlistViewModel
 import dev.infa.page3.ui.components.BottomNavBar
+import dev.infa.page3.ui.components.AppFloatingNavBottomPadding
 import dev.infa.page3.ui.components.ErrorScreen
 import dev.infa.page3.ui.components.LoadingScreen
 import dev.infa.page3.ui.components.LoginButton
@@ -145,22 +147,11 @@ fun WishlistScreen(navigator: Navigator, wishlistViewModel: WishlistViewModel, p
                             totalitem
                         )
                     },
-                    bottomBar = {
-                        BottomNavBar(
-                            currentNav = currentTab,
-                            navigator,
-                            categoryViewModel = categoryViewModel,
-                            productViewModel = productViewModel,
-                            wishListViewModel = wishlistViewModel,
-                            cartViewModel = cartViewModel,
-                            authViewModel = authViewModel
-
-                        )
-                    }
                 ) { innerPadding ->
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background)
                             .padding(innerPadding)
                     ) {
                         when (val state = wishlistState) {
@@ -204,6 +195,18 @@ fun WishlistScreen(navigator: Navigator, wishlistViewModel: WishlistViewModel, p
 
                             else -> {}
                         }
+
+                        Box(modifier = Modifier.align(Alignment.BottomCenter)) {
+                            BottomNavBar(
+                                currentNav = currentTab,
+                                navigator,
+                                categoryViewModel = categoryViewModel,
+                                productViewModel = productViewModel,
+                                wishListViewModel = wishlistViewModel,
+                                cartViewModel = cartViewModel,
+                                authViewModel = authViewModel
+                            )
+                        }
                     }
                 }
             }
@@ -234,27 +237,36 @@ fun WishlistScreen(navigator: Navigator, wishlistViewModel: WishlistViewModel, p
                                 totalitem
                             )
                         },
-                        bottomBar = {
-                            BottomNavBar(
-                                currentNav = currentTab,
-                                navigator,
-                                categoryViewModel = categoryViewModel,
-                                productViewModel = productViewModel,
-                                wishListViewModel = wishlistViewModel,
-                                cartViewModel = cartViewModel,
-                                authViewModel = authViewModel
-
-                            )
-                        }
                     ) { innerPadding ->
                         Box(
-                            modifier = Modifier.fillMaxSize().padding(innerPadding),
-                            contentAlignment = Alignment.Center
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.background)
+                                .padding(innerPadding)
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                LoginButton { navigator.push(OTPScreen())}
-                                Spacer(Modifier.height(10.dp))
-                                SignUpButton {navigator.push(OTPScreen()) }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(bottom = AppFloatingNavBottomPadding),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    LoginButton { navigator.push(OTPScreen())}
+                                    Spacer(Modifier.height(10.dp))
+                                    SignUpButton {navigator.push(OTPScreen()) }
+                                }
+                            }
+
+                            Box(modifier = Modifier.align(Alignment.BottomCenter)) {
+                                BottomNavBar(
+                                    currentNav = currentTab,
+                                    navigator,
+                                    categoryViewModel = categoryViewModel,
+                                    productViewModel = productViewModel,
+                                    wishListViewModel = wishlistViewModel,
+                                    cartViewModel = cartViewModel,
+                                    authViewModel = authViewModel
+                                )
                             }
                         }
                     }
@@ -274,7 +286,12 @@ private fun WishlistGridContent(
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(12.dp),
+        contentPadding = PaddingValues(
+            start = 12.dp,
+            end = 12.dp,
+            top = 12.dp,
+            bottom = AppFloatingNavBottomPadding
+        ),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {

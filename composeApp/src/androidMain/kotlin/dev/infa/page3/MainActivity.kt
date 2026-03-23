@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -19,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import dev.infa.page3.navigation.AppViewModels
 import dev.infa.page3.navigation.initializePlatform
+import dev.infa.page3.payment.PhonePeSDKHelper
 import dev.infa.page3.ui.theme.Page3Theme
 import kotlinx.coroutines.launch
 
@@ -59,6 +61,19 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    // ======================== PhonePe SDK ========================
+
+    /**
+     * ActivityResultLauncher for PhonePe SDK checkout callback.
+     * After the user completes (or cancels) the PhonePe payment,
+     * this callback fires and we delegate to PhonePeSDKHelper.
+     */
+    private val phonePeResultLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { _ ->
+            Log.d("MainActivity", "PhonePe SDK result received")
+            PhonePeSDKHelper.onPaymentResult()
+        }
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,6 +84,12 @@ class MainActivity : ComponentActivity() {
 
         // 2. Permissions are still required for BLE features
         checkPermissions()
+
+        // 3. Register PhonePe SDK with this Activity and the result launcher
+        PhonePeSDKHelper.registerActivity(this, phonePeResultLauncher)
+
+        // 4. Initialize PhonePe SDK
+        initPhonePeSDK()
 
         setContent {
             Page3Theme {
@@ -87,6 +108,33 @@ class MainActivity : ComponentActivity() {
 
         if (allPermissionsGranted && !isBluetoothEnabled()) {
             suggestEnableBluetooth()
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        PhonePeSDKHelper.cleanup()
+    }
+
+    /**
+     * Initialize PhonePe SDK with merchant credentials from BuildConfig.
+     */
+    private fun initPhonePeSDK() {
+        try {
+            val merchantId = BuildConfig.PHONEPE_MERCHANT_ID
+            if (merchantId.isNotEmpty()) {
+                val isSandbox = false // PRODUCTION
+                val result = PhonePeSDKHelper.initSDK(
+                    merchantId = merchantId,
+                    flowId = "page3_checkout",
+                    isSandbox = isSandbox
+                )
+                Log.d("MainActivity", "PhonePe SDK init: $result")
+            } else {
+                Log.w("MainActivity", "PhonePe SDK credentials not configured. Update gradle.properties.")
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "PhonePe SDK init failed: ${e.message}", e)
         }
     }
 
@@ -149,4 +197,3 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-

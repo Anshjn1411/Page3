@@ -15,10 +15,15 @@ import androidx.compose.ui.unit.dp
 fun OrderStatusChip(status: String) {
     val (backgroundColor, textColor) = when (status.uppercase()) {
         "PENDING" -> Pair(Color(0xFFFFF3CD), Color(0xFF856404))
+        "ON-HOLD" -> Pair(Color(0xFFFFF3CD), Color(0xFF856404))
         "PLACED" -> Pair(Color(0xFFD1ECF1), Color(0xFF0C5460))
         "CONFIRMED" -> Pair(Color(0xFFD4EDDA), Color(0xFF155724))
+        "PROCESSING" -> Pair(Color(0xFFD1ECF1), Color(0xFF0C5460))
         "SHIPPED" -> Pair(Color(0xFFCCE5FF), Color(0xFF004085))
         "DELIVERED" -> Pair(Color(0xFFD4EDDA), Color(0xFF155724))
+        "COMPLETED" -> Pair(Color(0xFFD4EDDA), Color(0xFF155724))
+        "REFUNDED" -> Pair(Color(0xFFE2E3E5), Color(0xFF383D41))
+        "FAILED" -> Pair(Color(0xFFF8D7DA), Color(0xFF721C24))
         "CANCELLED" -> Pair(Color(0xFFF8D7DA), Color(0xFF721C24))
         else -> Pair(Color.LightGray, Color.Black)
     }

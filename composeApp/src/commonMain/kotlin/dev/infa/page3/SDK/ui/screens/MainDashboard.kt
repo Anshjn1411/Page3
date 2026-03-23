@@ -3,6 +3,7 @@ package dev.infa.page3.SDK.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -15,6 +16,8 @@ import androidx.compose.ui.unit.*
 import cafe.adriel.voyager.navigator.Navigator
 import dev.infa.page3.SDK.data.DayStepData
 import dev.infa.page3.SDK.ui.components.*
+import dev.infa.page3.SDK.ui.components.LocalSdkNavVisibility
+import dev.infa.page3.SDK.ui.components.SdkNavVisibilityState
 import dev.infa.page3.SDK.ui.navigation.*
 import dev.infa.page3.SDK.ui.utils.*
 import dev.infa.page3.SDK.viewModel.*
@@ -63,6 +66,7 @@ fun DashboardScreen(
     }
 
     var currentTab by remember { mutableStateOf(BottomTab.HOME) }
+    val navVisibilityState = remember { SdkNavVisibilityState() }
 
     // Guard: only fetch capabilities once per connection
     var capsFetched by remember { mutableStateOf(false) }
@@ -197,124 +201,146 @@ fun DashboardScreen(
 
     val oneKeyMetric =
         if (deviceCapabilities?.hasOneKeyCheck == true) Unit else null
-    Scaffold(
-        containerColor = AppColors.BackgroundPrimary,
-        topBar = {
-            DashboardTopBar(
-                isConnected = isConnected,
-                deviceName = deviceName,
-                batteryLevel = batteryLevel ?: 0
-            )
-        },
-        bottomBar = {
-            BottomNavBar(
-                currentTab = currentTab,
-                onTabSelected = { tab ->
-                    currentTab = tab
 
-                    when (tab) {
-                        BottomTab.HOME -> navController.replace(HomeScreenSDK())
-                        BottomTab.STRAIN -> navController.push(ExerciseScreenSDK())
-                        BottomTab.RECOVERY -> navController.push(HeartRateScreenSDK())
-                        BottomTab.STEP -> navController.push(StepsScreenSDK())
-                        BottomTab.PROFILE -> navController.push(ProfileScreenSDK())
-                    }
+    CompositionLocalProvider(LocalSdkNavVisibility provides navVisibilityState) {
+        val listState = rememberLazyListState()
+        val navVisibility = LocalSdkNavVisibility.current
+        var prevScrollOffset by remember { mutableStateOf(0) }
+
+        LaunchedEffect(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
+            val currentOffset =
+                listState.firstVisibleItemIndex * 10000 + listState.firstVisibleItemScrollOffset
+            val scrollingDown = currentOffset > prevScrollOffset
+            prevScrollOffset = currentOffset
+
+            navVisibility.isVisible =
+                if (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < 50) {
+                    true
+                } else {
+                    !scrollingDown
                 }
-            )
         }
-    ) { padding ->
 
-        if (!isConnected) {
-            DeviceDisconnectedState(
-                onRetry = {
-                    navController.push(ProfileScreenSDK())
-                }
-            )
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
+        Scaffold(
+            containerColor = AppColors.BackgroundPrimary,
+            topBar = {
+                DashboardTopBar(
+                    isConnected = isConnected,
+                    deviceName = deviceName,
+                    batteryLevel = batteryLevel ?: 0
+                )
+            },
+            bottomBar = {
+                BottomNavBar(
+                    currentTab = currentTab,
+                    onTabSelected = { tab ->
+                        currentTab = tab
 
-                item {
-                    DateSelector(
-                        selectedDate = selectedDate,
-                        onDateChange = { newDate ->
-                            selectedDate = newDate
+                        when (tab) {
+                            BottomTab.HOME -> navController.replace(HomeScreenSDK())
+                            BottomTab.STRAIN -> navController.push(ExerciseScreenSDK())
+                            BottomTab.RECOVERY -> navController.push(HeartRateScreenSDK())
+                            BottomTab.STEP -> navController.push(StepsScreenSDK())
+                            BottomTab.PROFILE -> navController.push(ProfileScreenSDK())
                         }
-                    )
-                }
+                    }
+                )
+            }
+        ) { padding ->
 
-                item {
-                    val currentStepData = DayStepData(
-                        totalSteps = todaySteps,
-                    )
+            if (!isConnected) {
+                DeviceDisconnectedState(
+                    onRetry = {
+                        navController.push(ProfileScreenSDK())
+                    }
+                )
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
 
-                    ProgressTripleRow(
-                        stepData = currentStepData,
-                        stepGoal = stepGoal,
-                        sleepData = homeSleepData,
-                        isLoadingSteps = isSyncing,
-                        navController = navController
-                    )
-                }
-
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(AppDimensions.Spacing.ExtraLarge)) {
-
-                        // Heart Rate
-                        heartMetric?.let { metric ->
-                            MetricSectionCard(metric) {
-                                navController.push(HeartRateScreenSDK())
+                    item {
+                        DateSelector(
+                            selectedDate = selectedDate,
+                            onDateChange = { newDate ->
+                                selectedDate = newDate
                             }
-                        }
+                        )
+                    }
 
-                        // HRV
-                        hrvMetric?.let { metric ->
-                            MetricSectionCard(metric) {
-                                navController.push(HrvScreen())
+                    item {
+                        val currentStepData = DayStepData(
+                            totalSteps = todaySteps,
+                        )
+
+                        ProgressTripleRow(
+                            stepData = currentStepData,
+                            stepGoal = stepGoal,
+                            sleepData = homeSleepData,
+                            isLoadingSteps = isSyncing,
+                            navController = navController
+                        )
+                    }
+
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(AppDimensions.Spacing.ExtraLarge)) {
+
+                            // Heart Rate
+                            heartMetric?.let { metric ->
+                                MetricSectionCard(metric) {
+                                    navController.push(HeartRateScreenSDK())
+                                }
                             }
-                        }
 
-                        // Blood Pressure
-                        bloodPressureMetric?.let { metric ->
-                            MetricSectionCard(metric) {
-                                navController.push(BloodPressureScreen())
+                            // HRV
+                            hrvMetric?.let { metric ->
+                                MetricSectionCard(metric) {
+                                    navController.push(HrvScreen())
+                                }
                             }
-                        }
 
-                        // Blood Oxygen (SpO2)
-                        spo2Metric?.let { metric ->
-                            MetricSectionCard(metric) {
-                                navController.push(BloodOxygenScreen())
+                            // Blood Pressure
+                            bloodPressureMetric?.let { metric ->
+                                MetricSectionCard(metric) {
+                                    navController.push(BloodPressureScreen())
+                                }
                             }
-                        }
 
-                        // Stress
-                        stressMetric?.let { metric ->
-                            MetricSectionCard(metric) {
-                                navController.push(StressScreenSDK())
+                            // Blood Oxygen (SpO2)
+                            spo2Metric?.let { metric ->
+                                MetricSectionCard(metric) {
+                                    navController.push(BloodOxygenScreen())
+                                }
                             }
-                        }
 
-                        // Temperature
-                        temperatureMetric?.let { metric ->
-                            MetricSectionCard(metric) {
-                                navController.push(TemperatureScreenSDK())
+                            // Stress
+                            stressMetric?.let { metric ->
+                                MetricSectionCard(metric) {
+                                    navController.push(StressScreenSDK())
+                                }
                             }
-                        }
 
-                        // Atmospheric Pressure
-                        pressureMetric?.let { metric ->
-                            MetricSectionCard(metric) {
-                                navController.push(PressureSDK())
+                            // Temperature
+                            temperatureMetric?.let { metric ->
+                                MetricSectionCard(metric) {
+                                    navController.push(TemperatureScreenSDK())
+                                }
                             }
-                        }
 
-                        oneKeyMetric?.let {
-                            OneKeyMeasurementCard(viewModel = instantMeasuresViewModel)
+                            // Atmospheric Pressure
+                            pressureMetric?.let { metric ->
+                                MetricSectionCard(metric) {
+                                    navController.push(PressureSDK())
+                                }
+                            }
+
+                            oneKeyMetric?.let {
+                                OneKeyMeasurementCard(viewModel = instantMeasuresViewModel)
+                            }
                         }
                     }
                 }

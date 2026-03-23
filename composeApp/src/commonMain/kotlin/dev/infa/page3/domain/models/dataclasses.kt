@@ -291,6 +291,8 @@ data class WcOrder(
     val id: Int? = null,
     val number: String? = null,
     val status: String? = null,
+    @SerialName("customer_id") val customerId: Int? = null,
+    @SerialName("customer_note") val customerNote: String? = null,
     val currency: String? = null,
     @SerialName("date_created") val dateCreated: String? = null,
     @SerialName("total") val total: String? = null,
@@ -305,6 +307,9 @@ data class WcCreateOrderRequest(
     val payment_method: String,
     val payment_method_title: String,
     val set_paid: Boolean = false,
+    @SerialName("customer_id") val customerId: Int? = null,
+    val status: String? = null, // e.g., "pending", "processing", "completed", "cancelled"
+    @SerialName("customer_note") val customerNote: String? = null,
     val billing: WcAddress? = null,
     val shipping: WcAddress? = null,
     @SerialName("line_items") val lineItems: List<WcOrderLineItem> = emptyList()
@@ -417,6 +422,46 @@ data class WcRefundCreateRequest(
     val amount: String,
     val reason: String? = null,
     val refund_payment: Boolean = false
+)
+
+@Serializable
+data class WcOrderNote(
+    val id: Int? = null,
+    val note: String? = null,
+    @SerialName("customer_note") val customerNote: Boolean? = null,
+    @SerialName("date_created") val dateCreated: String? = null
+)
+
+@Serializable
+data class WcOrderNoteCreateRequest(
+    val note: String,
+    @SerialName("customer_note") val customerNote: Boolean = true
+)
+
+@Serializable
+data class WcOrderActionRequest(
+    val action: String
+)
+
+@Serializable
+data class WcOrderBatchRequest(
+    val create: List<WcCreateOrderRequest> = emptyList(),
+    val update: List<WcOrderBatchUpdateItem> = emptyList(),
+    val delete: List<Int> = emptyList()
+)
+
+@Serializable
+data class WcOrderBatchUpdateItem(
+    val id: Int,
+    val status: String? = null,
+    val set_paid: Boolean? = null
+)
+
+@Serializable
+data class WcOrderBatchResponse(
+    val create: List<WcOrder> = emptyList(),
+    val update: List<WcOrder> = emptyList(),
+    val delete: List<WcOrder> = emptyList()
 )
 
 @Serializable
@@ -559,6 +604,7 @@ typealias WcReviews = List<WcReview>
 typealias WcCoupons = List<WcCoupon>
 typealias WcCurrencies = List<WcCurrency>
 typealias WcRefunds = List<WcRefund>
+typealias WcOrderNotes = List<WcOrderNote>
 typealias WcShippingZones = List<WcShippingZone>
 typealias WcShippingMethods = List<WcShippingMethod>
 typealias WcTaxRates = List<WcTaxRate>
@@ -824,6 +870,7 @@ data class OrderDetailed(
 data class CreateOrderRequest(
     val firstName: String,
     val lastName: String,
+    val email: String? = null,
     val streetAddress: String,
     val city: String,
     val state: String,

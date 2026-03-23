@@ -55,6 +55,7 @@ import dev.infa.page3.ui.orderscreen.AddressManagementScreen
 import dev.infa.page3.ui.orderscreen.CheckoutScreenContent
 import dev.infa.page3.ui.otherScreen.InboxScreen
 import dev.infa.page3.ui.orderscreen.OrderHistoryScreenContent
+import dev.infa.page3.ui.orderscreen.OrderDetailScreenContent
 import dev.infa.page3.ui.orderscreen.OrderSuccessScreenContent
 import dev.infa.page3.ui.orderscreen.PaymentWebViewScreenContent
 import dev.infa.page3.ui.otherScreen.AboutUsScreen
@@ -464,26 +465,35 @@ class ShippingPolicyScreenNav() : Screen {
 
 
 
-//
-//class OrderHistoryScreen(
-//    private val orderViewModel: CartViewModel // assuming you keep orders in cartViewModel or create separate OrderViewModel
-//) : Screen {
-//    @Composable
-//    override fun Content() {
-//        val navigator = LocalNavigator.currentOrThrow
-//        OrderHistoryScreenContent(navigator, orderViewModel)
-//    }
-//}
+class OrderHistoryScreenNav(
+    val defaultEmail: String? = null
+) : Screen {
+    @Composable
+    override fun Content() {
+        val navigator = LocalNavigator.currentOrThrow
+        val cartViewModel = AppViewModels.cartViewModel
+        OrderHistoryScreenContent(
+            navigator = navigator,
+            orderViewModel1 = cartViewModel,
+            defaultEmail = defaultEmail
+        )
+    }
+}
 
-//class OrderDetailScreen(
-//    private val orderViewModel: CartViewModel
-//) : Screen {
-//    @Composable
-//    override fun Content() {
-//        val navigator = LocalNavigator.currentOrThrow
-//        //OrderDetailScreenContent(navigator, orderViewModel)
-//    }
-//}
+data class OrderDetailScreenNav(
+    val orderId: Int,
+    val email: String
+) : Screen {
+    @Composable
+    override fun Content() {
+        val navigator = LocalNavigator.currentOrThrow
+        OrderDetailScreenContent(
+            navigator = navigator,
+            orderId = orderId,
+            email = email
+        )
+    }
+}
 
 
 

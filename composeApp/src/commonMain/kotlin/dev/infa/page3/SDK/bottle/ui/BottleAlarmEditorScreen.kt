@@ -2,9 +2,10 @@ package dev.infa.page3.SDK.bottle.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
@@ -12,10 +13,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.navigator.Navigator
@@ -23,7 +23,11 @@ import dev.infa.page3.SDK.bottle.data.BottleAlarm
 import dev.infa.page3.SDK.bottle.viewmodel.BottleViewModel
 import dev.infa.page3.SDK.ui.theme.*
 
-private val BottleBlue = Color(0xFF4FC3F7)
+private val Blue1   = Color(0xFF4FC3F7)
+private val Blue2   = Color(0xFF0288D1)
+private val BgDeep  = Color(0xFF0A0E1A)
+private val BgCard2 = Color(0xFF1A2235)
+private val Divider = Color(0xFF1F2D45)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,127 +38,61 @@ fun BottleAlarmEditorScreen(
 ) {
     val isEditing = existingAlarm != null
 
-    var hour by remember { mutableStateOf(existingAlarm?.hour ?: 9) }
-    var minute by remember { mutableStateOf(existingAlarm?.minute ?: 0) }
-    var isOn by remember { mutableStateOf(existingAlarm?.isOn ?: true) }
+    var hour       by remember { mutableStateOf(existingAlarm?.hour ?: 9) }
+    var minute     by remember { mutableStateOf(existingAlarm?.minute ?: 0) }
+    var isOn       by remember { mutableStateOf(existingAlarm?.isOn ?: true) }
     var repeatDays by remember {
-        mutableStateOf(
-            existingAlarm?.repeatDaysList()
-                ?: listOf(true, true, true, true, true, false, false) // Mon-Fri default
-        )
+        mutableStateOf(existingAlarm?.repeatDaysList() ?: listOf(true, true, true, true, true, false, false))
     }
-
     val dayLabels = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
-    Scaffold(
-        containerColor = AppColors.BackgroundPrimary,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        if (isEditing) "Edit Alarm" else "Add Alarm",
-                        color = AppColors.TextPrimary,
-                        style = AppTypography.HeadingSmall
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = { navigator.pop() }) {
-                        Icon(Icons.Default.ArrowBack, "Back", tint = AppColors.TextPrimary)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = AppColors.BackgroundPrimary)
-            )
-        }
-    ) { padding ->
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(BgDeep)
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = AppDimensions.ScreenPadding.Horizontal),
+                .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.height(32.dp))
+            // ── App bar ─────────────────────────────────────────────────────
+            Spacer(Modifier.height(16.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { navigator.pop() }) {
+                    Icon(Icons.Default.ArrowBack, null, tint = Color.White.copy(alpha = 0.7f))
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (isEditing) "Edit Alarm" else "New Alarm",
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
 
-            // ─── Time Picker ────────────────────────────────────────────────
+            Spacer(Modifier.height(36.dp))
 
-            Text("⏰", fontSize = 48.sp)
-
+            // ── Time display ─────────────────────────────────────────────────
+            Text("⏰", fontSize = 52.sp)
             Spacer(Modifier.height(24.dp))
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
-                // Hour input
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    IconButton(onClick = { hour = (hour + 1) % 24 }) {
-                        Text("▲", color = BottleBlue, fontSize = 20.sp)
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(80.dp, 64.dp)
-                            .clip(AppShapes.CardMedium)
-                            .background(AppColors.SurfaceVariant),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = hour.toString().padStart(2, '0'),
-                            color = AppColors.TextPrimary,
-                            style = AppTypography.DisplaySmall
-                        )
-                    }
-                    IconButton(onClick = { hour = if (hour > 0) hour - 1 else 23 }) {
-                        Text("▼", color = BottleBlue, fontSize = 20.sp)
-                    }
-                }
-
-                Text(
-                    ":",
-                    color = AppColors.TextPrimary,
-                    style = AppTypography.DisplaySmall,
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-
-                // Minute input
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    IconButton(onClick = { minute = (minute + 1) % 60 }) {
-                        Text("▲", color = BottleBlue, fontSize = 20.sp)
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(80.dp, 64.dp)
-                            .clip(AppShapes.CardMedium)
-                            .background(AppColors.SurfaceVariant),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = minute.toString().padStart(2, '0'),
-                            color = AppColors.TextPrimary,
-                            style = AppTypography.DisplaySmall
-                        )
-                    }
-                    IconButton(onClick = { minute = if (minute > 0) minute - 1 else 59 }) {
-                        Text("▼", color = BottleBlue, fontSize = 20.sp)
-                    }
-                }
+                TimeSpinner(value = hour, onIncrease = { hour = (hour + 1) % 24 }, onDecrease = { hour = if (hour > 0) hour - 1 else 23 })
+                Text(":", color = Color.White, fontSize = 44.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 12.dp))
+                TimeSpinner(value = minute, onIncrease = { minute = (minute + 1) % 60 }, onDecrease = { minute = if (minute > 0) minute - 1 else 59 })
             }
 
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(36.dp))
 
-            // ─── Day Selector ───────────────────────────────────────────────
-
-            Text(
-                "Repeat Days",
-                color = AppColors.TextSecondary,
-                style = AppTypography.LabelLarge
-            )
-
+            // ── Days selector ─────────────────────────────────────────────────
+            Text("Repeat Days", color = Color.White.copy(alpha = 0.45f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.8.sp)
             Spacer(Modifier.height(12.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 dayLabels.forEachIndexed { index, label ->
                     val isSelected = repeatDays[index]
                     Box(
@@ -162,22 +100,24 @@ fun BottleAlarmEditorScreen(
                             .size(42.dp)
                             .clip(CircleShape)
                             .background(
-                                if (isSelected) BottleBlue.copy(alpha = 0.2f)
-                                else AppColors.SurfaceVariant
+                                if (isSelected)
+                                    Brush.radialGradient(listOf(Blue1.copy(0.35f), Blue2.copy(0.15f)))
+                                else
+                                    Brush.radialGradient(listOf(BgCard2, BgCard2))
                             )
-                            .clickable {
-                                repeatDays = repeatDays.toMutableList().also {
-                                    it[index] = !it[index]
-                                }
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                repeatDays = repeatDays.toMutableList().also { it[index] = !it[index] }
                             },
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = label.take(2),
-                            color = if (isSelected) BottleBlue else AppColors.TextSecondary,
-                            style = AppTypography.LabelSmall.copy(
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                            )
+                            label.take(2),
+                            color = if (isSelected) Blue1 else Color.White.copy(alpha = 0.35f),
+                            fontSize = 11.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                         )
                     }
                 }
@@ -185,46 +125,42 @@ fun BottleAlarmEditorScreen(
 
             Spacer(Modifier.height(24.dp))
 
-            // ─── Enable/Disable Toggle ──────────────────────────────────────
-
+            // ── Enable toggle ────────────────────────────────────────────────
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(AppShapes.CardMedium)
-                    .background(AppColors.SurfaceVariant)
-                    .padding(16.dp),
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(BgCard2)
+                    .padding(horizontal = 18.dp, vertical = 14.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Alarm enabled", color = AppColors.TextPrimary, style = AppTypography.BodyMedium)
+                Text("Alarm enabled", color = Color.White.copy(alpha = 0.75f), fontSize = 14.sp)
                 Switch(
                     checked = isOn,
                     onCheckedChange = { isOn = it },
-                    colors = SwitchDefaults.colors(checkedTrackColor = BottleBlue)
+                    colors = SwitchDefaults.colors(checkedTrackColor = Blue1, uncheckedTrackColor = Divider)
                 )
             }
 
             Spacer(Modifier.weight(1f))
 
-            // ─── Save / Cancel ──────────────────────────────────────────────
-
+            // ── Action Buttons ───────────────────────────────────────────────
             Row(
-                modifier = Modifier
+                Modifier
                     .fillMaxWidth()
                     .padding(bottom = 32.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 OutlinedButton(
                     onClick = { navigator.pop() },
-                    shape = AppShapes.Chip,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = AppColors.TextSecondary
-                    )
+                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier.weight(1f).height(52.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White.copy(alpha = 0.5f)),
+                    border = ButtonDefaults.outlinedButtonBorder.copy(width = 1.dp)
                 ) {
-                    Text("Cancel", style = AppTypography.ButtonMedium)
+                    Text("Cancel", fontWeight = FontWeight.SemiBold)
                 }
-
                 Button(
                     onClick = {
                         val bitmask = BottleAlarm.buildRepeatBitmask(repeatDays)
@@ -239,17 +175,60 @@ fun BottleAlarmEditorScreen(
                         viewModel.updateAlarm(alarm)
                         navigator.pop()
                     },
-                    shape = AppShapes.Chip,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = BottleBlue)
+                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier.weight(1f).height(52.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Blue1)
                 ) {
-                    Text(
-                        if (isEditing) "Update" else "Save",
-                        color = Color.White,
-                        style = AppTypography.ButtonMedium
-                    )
+                    Text(if (isEditing) "Update" else "Save", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 }
             }
+        }
+    }
+}
+
+// ─── Time Spinner Component ───────────────────────────────────────────────────────
+
+@Composable
+private fun TimeSpinner(value: Int, onIncrease: () -> Unit, onDecrease: () -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF1A2235))
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onIncrease() },
+            contentAlignment = Alignment.Center
+        ) {
+            Text("▲", color = Blue1.copy(alpha = 0.8f), fontSize = 18.sp)
+        }
+        Spacer(Modifier.height(8.dp))
+        Box(
+            modifier = Modifier
+                .size(84.dp, 68.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(
+                    Brush.linearGradient(listOf(Color(0xFF1A2235), Color(0xFF111827)))
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                value.toString().padStart(2, '0'),
+                color = Color.White,
+                fontSize = 42.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = (-2).sp
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Box(
+            Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF1A2235))
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onDecrease() },
+            contentAlignment = Alignment.Center
+        ) {
+            Text("▼", color = Blue1.copy(alpha = 0.8f), fontSize = 18.sp)
         }
     }
 }

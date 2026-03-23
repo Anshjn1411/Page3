@@ -2,6 +2,7 @@ package dev.infa.page3.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -38,6 +39,7 @@ import dev.infa.page3.presentation.viewModel.CategoryViewModel
 import dev.infa.page3.presentation.viewModel.ProductViewModel
 import dev.infa.page3.presentation.viewmodel.WishlistViewModel
 import dev.infa.page3.ui.components.BottomNavBar
+import dev.infa.page3.ui.components.AppFloatingNavBottomPadding
 import dev.infa.page3.ui.components.EmptyScreen
 import dev.infa.page3.ui.components.ErrorScreen
 import dev.infa.page3.ui.components.LoadingScreen
@@ -108,22 +110,11 @@ fun CartScreen(navigator: Navigator, wishlistViewModel: WishlistViewModel, produ
                     totalitem
                 )
             },
-            bottomBar = {
-                BottomNavBar(
-                    currentNav = currentTab,
-                    navigator,
-                    categoryViewModel = categoryViewModel,
-                    productViewModel = productViewModel,
-                    wishListViewModel = wishlistViewModel,
-                    cartViewModel = cartViewModel,
-                    authViewModel = authViewModel
-
-                )
-            }
         ) { innerPadding ->
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
                     .padding(innerPadding)
             ) {
                 when (val state = cartState) {
@@ -162,6 +153,18 @@ fun CartScreen(navigator: Navigator, wishlistViewModel: WishlistViewModel, produ
                         (state as ListUiState.Error).message ?: "Failed to fetch cart"
                     )
                 }
+
+                Box(modifier = Modifier.align(Alignment.BottomCenter)) {
+                    BottomNavBar(
+                        currentNav = currentTab,
+                        navigator,
+                        categoryViewModel = categoryViewModel,
+                        productViewModel = productViewModel,
+                        wishListViewModel = wishlistViewModel,
+                        cartViewModel = cartViewModel,
+                        authViewModel = authViewModel
+                    )
+                }
             }
         }
     }
@@ -180,7 +183,12 @@ private fun CartContent(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
-            contentPadding = PaddingValues(8.dp),
+            contentPadding = PaddingValues(
+                start = 8.dp,
+                end = 8.dp,
+                top = 8.dp,
+                bottom = AppFloatingNavBottomPadding
+            ),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {

@@ -51,15 +51,14 @@ import cafe.adriel.voyager.navigator.Navigator
 import dev.infa.page3.data.model.CartItemWithAttributes
 import dev.infa.page3.data.model.CreateOrderRequest
 import dev.infa.page3.data.remote.SessionManager
-import dev.infa.page3.navigation.PaymentWebViewScreenNav
 import dev.infa.page3.presentation.api.ApiService
 import dev.infa.page3.presentation.repositary.OrderRepository
 
 import dev.infa.page3.presentation.uiSatateClaases.ListUiState
-import dev.infa.page3.presentation.uiSatateClaases.SingleUiState
 import dev.infa.page3.presentation.viewModel.AuthViewModel
 import dev.infa.page3.presentation.viewModel.CartViewModel
 import dev.infa.page3.presentation.viewModel.OrderViewModel
+import dev.infa.page3.presentation.viewModel.PhonePePaymentState
 import dev.infa.page3.presentation.viewModel.ProductViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -74,17 +73,28 @@ fun CheckoutScreenContent(
         OrderViewModel(OrderRepository(ApiService(), SessionManager()))
     }
 
+    // Set PhonePe credentials from BuildConfig
+    LaunchedEffect(Unit) {
+        orderViewModel.setPhonePeCredentials(
+            clientId = getPhonePeClientId(),
+            clientSecret = getPhonePeClientSecret(),
+            clientVersion = getPhonePeClientVersion(),
+            merchantId = getPhonePeMerchantId()
+        )
+    }
+
     val authState by authViewModel.uiState.collectAsState()
     val currentUser by authViewModel.currentUser.collectAsState()
 
     val orderCreationState by orderViewModel.orderCreationState.collectAsState()
-    val paymentLinkState by orderViewModel.paymentLinkState.collectAsState()
+    val phonePePaymentState by orderViewModel.phonePePaymentState.collectAsState()
     val cartState by cartViewModel.cartState.collectAsState()
 
     var useSameAsBilling by remember { mutableStateOf(false) }
 
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
     var streetAddress by remember { mutableStateOf("") }
     var city by remember { mutableStateOf("") }
     var state by remember { mutableStateOf("") }
@@ -102,15 +112,16 @@ fun CheckoutScreenContent(
             val billing = currentUser!!.billing
             firstName = billing?.first_name ?: ""
             lastName = billing?.last_name ?: ""
+            email = billing?.email ?: ""
             streetAddress = billing?.address_1 ?: ""
             city = billing?.city ?: ""
             state = billing?.state ?: ""
             zipCode = billing?.postcode ?: ""
             mobile = billing?.phone ?: ""
         } else if (!useSameAsBilling) {
-            // Clear fields when unchecked
             firstName = ""
             lastName = ""
+            email = ""
             streetAddress = ""
             city = ""
             state = ""
@@ -119,20 +130,29 @@ fun CheckoutScreenContent(
         }
     }
 
-    // Handle payment link state
-    LaunchedEffect(paymentLinkState) {
-        when (paymentLinkState) {
-            is SingleUiState.Success -> {
-                val paymentUrl = (paymentLinkState as SingleUiState.Success).data.payment_link_url
+    // Handle PhonePe payment state changes
+    LaunchedEffect(phonePePaymentState) {
+        when (phonePePaymentState) {
+            is PhonePePaymentState.Loading -> {
+                isLoading = true
+                errorMessage = null
+            }
+            is PhonePePaymentState.SdkCheckoutActive -> {
+                // SDK has been launched — user is in PhonePe app
                 isLoading = false
+            }
+            is PhonePePaymentState.Verifying -> {
+                isLoading = true
+                errorMessage = null
+            }
+            is PhonePePaymentState.Success -> {
+                isLoading = false
+                errorMessage = null
                 showSuccessDialog = true
             }
-            is SingleUiState.Error -> {
-                errorMessage = (paymentLinkState as SingleUiState.Error).message
+            is PhonePePaymentState.Error -> {
                 isLoading = false
-            }
-            is SingleUiState.Loading -> {
-                isLoading = true
+                errorMessage = (phonePePaymentState as PhonePePaymentState.Error).message
             }
             else -> {}
         }
@@ -227,6 +247,17 @@ fun CheckoutScreenContent(
                     label = { Text("Last Name") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
+                    enabled = !isLoading && !useSameAsBilling
+                )
+
+                // Street Address
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it.trim() },
+                    label = { Text("Email") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                     enabled = !isLoading && !useSameAsBilling
                 )
 
@@ -404,6 +435,7 @@ fun CheckoutScreenContent(
                         val address = CreateOrderRequest(
                             firstName = firstName,
                             lastName = lastName,
+                            email = email,
                             streetAddress = streetAddress,
                             city = city,
                             state = state,
@@ -435,28 +467,18 @@ fun CheckoutScreenContent(
                                     }
                                 )
                             } else if (selectedPaymentMethod == "phonepe") {
-                                // PhonePe flow – create order and navigate to WebView
-                                isLoading = true
-                                orderViewModel.buyNow(
+                                // PhonePe SDK flow
+                                // Step 1: Initiate payment (NO order created yet)
+                                // Step 2: On payment success → order is auto-created
+                                // Step 3: On payment failure → no order created
+                                orderViewModel.buyNowWithSdk(
                                     address = address,
                                     cartItems = cartItems,
-                                    onPaymentUrl = { paymentUrl ->
-                                        isLoading = false
-                                        // Navigate to the payment WebView screen
-                                        val phonePeState = orderViewModel.phonePePaymentState.value
-                                        if (phonePeState is dev.infa.page3.presentation.viewModel.PhonePePaymentState.ReadyForPayment) {
-                                            navigator.push(
-                                                PaymentWebViewScreenNav(
-                                                    paymentUrl = phonePeState.paymentUrl,
-                                                    orderId = phonePeState.orderId,
-                                                    orderNumber = phonePeState.orderNumber,
-                                                    total = phonePeState.total
-                                                )
-                                            )
-                                        }
+                                    onSdkLaunched = {
+                                        // SDK checkout is now visible to the user
+                                        // Result handled automatically via state
                                     },
                                     onError = { error ->
-                                        isLoading = false
                                         errorMessage = error
                                     }
                                 )
@@ -478,7 +500,7 @@ fun CheckoutScreenContent(
                         )
                     } else {
                         Text(
-                            if (selectedPaymentMethod == "phonepe") "Proceed to Pay" else "Place Order & Pay",
+                            if (selectedPaymentMethod == "phonepe") "Proceed to Pay" else "Place Order",
                             fontSize = 16.sp
                         )
                     }
@@ -507,7 +529,13 @@ fun CheckoutScreenContent(
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             CircularProgressIndicator()
-                            Text("Processing your order...")
+                            Text(
+                                when (phonePePaymentState) {
+                                    is PhonePePaymentState.Verifying -> "Verifying payment..."
+                                    is PhonePePaymentState.Loading -> "Setting up payment..."
+                                    else -> "Processing..."
+                                }
+                            )
                         }
                     }
                 }
@@ -521,10 +549,19 @@ fun CheckoutScreenContent(
     }
 }
 
+/**
+ * Platform-specific functions to retrieve PhonePe credentials from BuildConfig.
+ */
+expect fun getPhonePeClientId(): String
+expect fun getPhonePeClientSecret(): String
+expect fun getPhonePeClientVersion(): String
+expect fun getPhonePeMerchantId(): String
 
 private fun validateAddress(address: CreateOrderRequest): Boolean {
     return address.firstName.isNotBlank() &&
             address.lastName.isNotBlank() &&
+            !address.email.isNullOrBlank() &&
+            address.email.contains("@") &&
             address.streetAddress.isNotBlank() &&
             address.city.isNotBlank() &&
             address.state.isNotBlank() &&

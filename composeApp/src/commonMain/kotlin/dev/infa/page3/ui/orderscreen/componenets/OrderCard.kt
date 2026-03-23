@@ -15,10 +15,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import dev.infa.page3.data.model.OrderDetailed
+import dev.infa.page3.data.model.WcOrder
 
 @Composable
-fun OrderCard(order: OrderDetailed, onClick: () -> Unit) {
+fun OrderCard(order: WcOrder, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -34,15 +34,15 @@ fun OrderCard(order: OrderDetailed, onClick: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Order #${order.orderNumber}",
+                    text = "Order #${order.number ?: order.id ?: "-"}",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                OrderStatusChip(status = order.orderStatus)
+                OrderStatusChip(status = order.status ?: "pending")
             }
 
             Text(
-                text = "Placed on: ${order.orderDate}",
+                text = "Placed on: ${order.dateCreated ?: "-"}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -54,11 +54,11 @@ fun OrderCard(order: OrderDetailed, onClick: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "${order.totalItem} item(s)",
+                    text = "${order.lineItems.size} item(s)",
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
-                    text = "₹${order.totalDiscountedPrice}",
+                    text = "₹${order.total ?: "0.00"}",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary

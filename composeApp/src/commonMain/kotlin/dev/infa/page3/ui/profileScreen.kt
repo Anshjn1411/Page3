@@ -25,6 +25,7 @@ import dev.infa.page3.presentation.uiSatateClaases.*
 import dev.infa.page3.presentation.viewModel.*
 import dev.infa.page3.presentation.viewmodel.WishlistViewModel
 import dev.infa.page3.ui.components.*
+import dev.infa.page3.ui.components.AppFloatingNavBottomPadding
 import dev.infa.page3.ui.otherScreen.ShippingPolicyScreen
 import dev.infa.page3.ui.otherScreen.TermsAndConditionsScreen
 import kotlinx.coroutines.launch
@@ -72,43 +73,51 @@ fun ProfileScreen(
                             totalitem
                         )
                     },
-                    bottomBar = {
-                        BottomNavBar(
-                            currentNav = currentTab,
-                            navigator,
-                            categoryViewModel = categoryViewModel,
-                            productViewModel = productViewModel,
-                            wishListViewModel = wishlistViewModel,
-                            cartViewModel = cartViewModel,
-                            authViewModel = authViewModel
-                        )
-                    }
                 ) { innerPadding ->
-                    if (currentUser != null) {
-                        ModernProfileContent(
-                            userData = currentUser!!,
-                            padding = innerPadding,
-                            navigator = navigator,
-                            onLogout = { showLogoutDialog = true }
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator()
-                        }
-                    }
-
-                    if (showLogoutDialog) {
-                        LogoutDialog(
-                            onDismiss = { showLogoutDialog = false },
-                            onConfirm = {
-                                authViewModel.logout()
-                                navigator.push(OTPScreen())
-                                showLogoutDialog = false
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0xFFF8F8F8))
+                            .padding(innerPadding)
+                    ) {
+                        if (currentUser != null) {
+                            ModernProfileContent(
+                                userData = currentUser!!,
+                                padding = PaddingValues(bottom = AppFloatingNavBottomPadding),
+                                navigator = navigator,
+                                onLogout = { showLogoutDialog = true }
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator()
                             }
-                        )
+                        }
+
+                        if (showLogoutDialog) {
+                            LogoutDialog(
+                                onDismiss = { showLogoutDialog = false },
+                                onConfirm = {
+                                    authViewModel.logout()
+                                    navigator.push(OTPScreen())
+                                    showLogoutDialog = false
+                                }
+                            )
+                        }
+
+                        Box(modifier = Modifier.align(Alignment.BottomCenter)) {
+                            BottomNavBar(
+                                currentNav = currentTab,
+                                navigator,
+                                categoryViewModel = categoryViewModel,
+                                productViewModel = productViewModel,
+                                wishListViewModel = wishlistViewModel,
+                                cartViewModel = cartViewModel,
+                                authViewModel = authViewModel
+                            )
+                        }
                     }
                 }
             }
@@ -136,23 +145,21 @@ fun ProfileScreen(
                             totalitem
                         )
                     },
-                    bottomBar = {
-                        BottomNavBar(
-                            currentNav = currentTab,
-                            navigator,
-                            categoryViewModel = categoryViewModel,
-                            productViewModel = productViewModel,
-                            wishListViewModel = wishlistViewModel,
-                            cartViewModel = cartViewModel,
-                            authViewModel = authViewModel
-                        )
-                    }
                 ) { innerPadding ->
                     Box(
-                        modifier = Modifier.fillMaxSize().padding(innerPadding),
-                        contentAlignment = Alignment.Center
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0xFFF8F8F8))
+                            .padding(innerPadding)
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(bottom = AppFloatingNavBottomPadding),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Spacer(Modifier.height(24.dp))
                             LoginButton { navigator.push(OTPScreen()) }
                             Spacer(Modifier.height(10.dp))
                             SignUpButton { navigator.push(OTPScreen()) }
@@ -163,7 +170,18 @@ fun ProfileScreen(
                             AppFooter()
 
                             Spacer(modifier = Modifier.height(24.dp))
+                        }
 
+                        Box(modifier = Modifier.align(Alignment.BottomCenter)) {
+                            BottomNavBar(
+                                currentNav = currentTab,
+                                navigator,
+                                categoryViewModel = categoryViewModel,
+                                productViewModel = productViewModel,
+                                wishListViewModel = wishlistViewModel,
+                                cartViewModel = cartViewModel,
+                                authViewModel = authViewModel
+                            )
                         }
                     }
                 }
@@ -246,8 +264,6 @@ fun ModernProfileContent(
     navigator: Navigator,
     onLogout: () -> Unit
 ) {
-    var showDialog by remember { mutableStateOf(false) }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -311,7 +327,9 @@ fun ModernProfileContent(
             ProfileMenuCard(
                 icon = Icons.Default.ShoppingBag,
                 title = "Orders",
-                onClick = { showDialog = true }
+                onClick = {
+                    navigator.push(OrderHistoryScreenNav(defaultEmail = userData.email))
+                }
             )
 
             ProfileMenuCard(
@@ -466,10 +484,6 @@ fun ModernProfileContent(
         Spacer(modifier = Modifier.height(32.dp))
         AppFooter()
         Spacer(modifier = Modifier.height(24.dp))
-    }
-
-    if (showDialog) {
-        UnderDevelopmentDialog(onDismiss = { showDialog = false })
     }
 }
 

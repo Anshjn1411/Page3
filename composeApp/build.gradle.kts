@@ -90,6 +90,8 @@ kotlin {
                 implementation("app.cash.sqldelight:android-driver:2.2.1")
                 implementation("com.airbnb.android:lottie-compose:6.6.0")
                 implementation("com.google.code.gson:gson:2.10.1")
+                // PhonePe SDK
+                implementation("phonepe.intentsdk.android.release:IntentSDK:5.3.0")
             }
         }
 
@@ -118,8 +120,14 @@ android {
         applicationId = "dev.infa.page3"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 16
-        versionName = "1.4"
+        versionCode = 19
+        versionName = "1.7"
+
+        // PhonePe SDK credentials from gradle.properties
+        buildConfigField("String", "PHONEPE_CLIENT_ID", "\"${project.findProperty("PHONEPE_CLIENT_ID") ?: ""}\"")
+        buildConfigField("String", "PHONEPE_CLIENT_SECRET", "\"${project.findProperty("PHONEPE_CLIENT_SECRET") ?: ""}\"")
+        buildConfigField("String", "PHONEPE_CLIENT_VERSION", "\"${project.findProperty("PHONEPE_CLIENT_VERSION") ?: "1"}\"")
+        buildConfigField("String", "PHONEPE_MERCHANT_ID", "\"${project.findProperty("PHONEPE_MERCHANT_ID") ?: ""}\"")
     }
 
     packaging {
@@ -151,6 +159,10 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 }
 

@@ -68,6 +68,7 @@ import dev.infa.page3.presentation.viewModel.CartViewModel
 import dev.infa.page3.presentation.viewModel.ProductViewModel
 import dev.infa.page3.presentation.viewmodel.WishlistViewModel
 import dev.infa.page3.ui.components.*
+import dev.infa.page3.ui.components.AppFloatingNavBottomPadding
 import dev.infa.page3.ui.productscreen.components.ProductCard
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -144,25 +145,17 @@ fun ShopScreen(
                     totalitem
                 )
             },
-            bottomBar = {
-                BottomNavBar(
-                    currentNav = currentTab,
-                    navigator,
-                    categoryViewModel = categoryViewModel,
-                    productViewModel = productViewModel,
-                    wishListViewModel = wishlistViewModel,
-                    cartViewModel = cartViewModel,
-                    authViewModel = authViewModel
-                )
-            }
         ) { innerPadding ->
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
                     .padding(innerPadding)
             ) {
                 Column(
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = AppFloatingNavBottomPadding)
                 ) {
                     Spacer(Modifier.height(8.dp))
 
@@ -263,7 +256,12 @@ fun ShopScreen(
                                 val products = (searchResultsState as ListUiState.Success).data
                                 LazyVerticalGrid(
                                     columns = GridCells.Fixed(2),
-                                    contentPadding = PaddingValues(12.dp),
+                                    contentPadding = PaddingValues(
+                                        start = 12.dp,
+                                        end = 12.dp,
+                                        top = 12.dp,
+                                        bottom = AppFloatingNavBottomPadding
+                                    ),
                                     verticalArrangement = Arrangement.spacedBy(12.dp),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                                     modifier = Modifier.fillMaxSize()
@@ -475,7 +473,7 @@ fun ShopScreen(
                                             }
 
                                             item {
-                                                Spacer(Modifier.height(20.dp))
+                                                Spacer(Modifier.height(AppFloatingNavBottomPadding))
                                             }
                                         }
 
@@ -525,6 +523,21 @@ fun ShopScreen(
                         }
                     }
                 }
+            }
+
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                BottomNavBar(
+                    currentNav = currentTab,
+                    navigator,
+                    categoryViewModel = categoryViewModel,
+                    productViewModel = productViewModel,
+                    wishListViewModel = wishlistViewModel,
+                    cartViewModel = cartViewModel,
+                    authViewModel = authViewModel
+                )
             }
         }
 

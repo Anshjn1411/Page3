@@ -7,20 +7,21 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import dev.infa.page3.SDK.bottle.ui.*
 import dev.infa.page3.navigation.AppViewModels
 
-// ─── Bottle Dashboard ───────────────────────────────────────────────────────────
+// ─── Main Container (with bottom nav — entry point) ─────────────────────────────
 
 class BottleDashboardScreenNav : Screen {
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        BottleDashboardScreen(
+        // BottleMainContainer hosts all 3 tabs with the floating glassmorphic bottom nav
+        BottleMainContainer(
             viewModel = AppViewModels.bottleViewModel,
             navigator = navigator
         )
     }
 }
 
-// ─── Bottle Settings ────────────────────────────────────────────────────────────
+// ─── Bottle Settings (standalone if pushed from outside) ─────────────────────────
 
 class BottleSettingsScreenNav : Screen {
     @Composable
@@ -33,7 +34,7 @@ class BottleSettingsScreenNav : Screen {
     }
 }
 
-// ─── Drinking History ───────────────────────────────────────────────────────────
+// ─── Drinking History (standalone if pushed from outside) ────────────────────────
 
 class BottleDrinkingHistoryScreenNav : Screen {
     @Composable
@@ -46,7 +47,7 @@ class BottleDrinkingHistoryScreenNav : Screen {
     }
 }
 
-// ─── Alarm Editor ───────────────────────────────────────────────────────────────
+// ─── Alarm Editor ────────────────────────────────────────────────────────────────
 
 class BottleAlarmEditorNav : Screen {
     @Composable

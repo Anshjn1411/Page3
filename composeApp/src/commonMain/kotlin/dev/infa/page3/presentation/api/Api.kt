@@ -1125,7 +1125,9 @@ class ApiService {
         page: Int = 1,
         perPage: Int = 20,
         status: String? = null,
-        customer: Int? = null
+        customer: Int? = null,
+        search: String? = null,
+        after: String? = null
     ): WcOrders {
         val base = "$wcApiBase/orders"
         val url = buildString {
@@ -1133,6 +1135,8 @@ class ApiService {
             append("?page=$page&per_page=$perPage")
             status?.let { append("&status=$it") }
             customer?.let { append("&customer=$it") }
+            search?.let { append("&search=$it") }
+            after?.let { append("&after=$it") }
         }.withAuth()
 
         return logApiCall(
@@ -1175,11 +1179,111 @@ class ApiService {
         }
     }
 
+    /**
+     * Update an existing WooCommerce Order.
+     * PUT /orders/{id}
+     * Used to update order status, payment info, etc. after payment.
+     */
+    suspend fun wcUpdateOrder(orderId: Int, body: WcCreateOrderRequest): WcOrder {
+        val url = "$wcApiBase/orders/$orderId".withAuth()
+
+        return logApiCall(
+            apiName = "wcUpdateOrder",
+            url = url,
+            method = "PUT",
+            headers = mapOf("Content-Type" to "application/json"),
+            requestBody = body
+        ) {
+            httpClient.put(url) {
+                contentType(ContentType.Application.Json)
+                setBody(body)
+            }
+        }
+    }
+
     suspend fun wcDeleteOrder(orderId: Int, force: Boolean = true): WcOrder {
         val url = "$wcApiBase/orders/$orderId?force=$force".withAuth()
 
         return logApiCall(
             apiName = "wcDeleteOrder",
+            url = url,
+            method = "DELETE",
+            headers = emptyMap()
+        ) {
+            httpClient.delete(url)
+        }
+    }
+
+    suspend fun wcBatchOrders(body: WcOrderBatchRequest): WcOrderBatchResponse {
+        val url = "$wcApiBase/orders/batch".withAuth()
+
+        return logApiCall(
+            apiName = "wcBatchOrders",
+            url = url,
+            method = "POST",
+            headers = mapOf("Content-Type" to "application/json"),
+            requestBody = body
+        ) {
+            httpClient.post(url) {
+                contentType(ContentType.Application.Json)
+                setBody(body)
+            }
+        }
+    }
+
+    suspend fun wcOrderAction(orderId: Int, action: String): WcOrder {
+        val url = "$wcApiBase/orders/$orderId/actions".withAuth()
+        val body = WcOrderActionRequest(action = action)
+
+        return logApiCall(
+            apiName = "wcOrderAction",
+            url = url,
+            method = "POST",
+            headers = mapOf("Content-Type" to "application/json"),
+            requestBody = body
+        ) {
+            httpClient.post(url) {
+                contentType(ContentType.Application.Json)
+                setBody(body)
+            }
+        }
+    }
+
+    suspend fun wcListOrderNotes(orderId: Int): WcOrderNotes {
+        val url = "$wcApiBase/orders/$orderId/notes".withAuth()
+
+        return logApiCall(
+            apiName = "wcListOrderNotes",
+            url = url,
+            method = "GET",
+            headers = emptyMap()
+        ) {
+            httpClient.get(url)
+        }
+    }
+
+    suspend fun wcCreateOrderNote(orderId: Int, body: WcOrderNoteCreateRequest): WcOrderNote {
+        val url = "$wcApiBase/orders/$orderId/notes".withAuth()
+
+        return logApiCall(
+            apiName = "wcCreateOrderNote",
+            url = url,
+            method = "POST",
+            headers = mapOf("Content-Type" to "application/json"),
+            requestBody = body
+        ) {
+            httpClient.post(url) {
+                contentType(ContentType.Application.Json)
+                setBody(body)
+            }
+        }
+    }
+
+    suspend fun wcDeleteOrderNote(orderId: Int, noteId: Int, force: Boolean = true): WcOrderNote {
+        val url = "$wcApiBase/orders/$orderId/notes/$noteId?force=$force".withAuth()
+
+        return logApiCall(
+            apiName = "wcDeleteOrderNote",
             url = url,
             method = "DELETE",
             headers = emptyMap()
@@ -1216,6 +1320,27 @@ class ApiService {
                 contentType(ContentType.Application.Json)
                 setBody(body)
             }
+        }
+    }
+
+    /**
+     * Delete a specific order refund.
+     * DELETE /orders/{order_id}/refunds/{refund_id}?force=true
+     */
+    suspend fun wcDeleteRefund(
+        orderId: Int,
+        refundId: Int,
+        force: Boolean = true
+    ): WcRefund {
+        val url = "$wcApiBase/orders/$orderId/refunds/$refundId?force=$force".withAuth()
+
+        return logApiCall(
+            apiName = "wcDeleteRefund",
+            url = url,
+            method = "DELETE",
+            headers = emptyMap()
+        ) {
+            httpClient.delete(url)
         }
     }
 
@@ -2262,6 +2387,108 @@ class ApiService {
         ) {
             httpClient.get(url) {
                 header("Authorization", "Bearer $token")
+            }
+        }
+    }
+
+    // ======================== PhonePe Payment Gateway APIs ========================
+
+    // PhonePe API base URLs
+    // IMPORTANT: Production uses DIFFERENT base URLs for auth vs checkout!
+    //   Auth:     https://api.phonepe.com/apis/identity-manager/
+    //   Checkout: https://api.phonepe.com/apis/pg/
+    // Sandbox uses the same base for both:
+    //   Both:     https://api-preprod.phonepe.com/apis/pg-sandbox/
+
+    // PRODUCTION URLs
+    private val phonePeAuthBase = "https://api.phonepe.com/apis/identity-manager"
+    private val phonePeCheckoutBase = "https://api.phonepe.com/apis/pg"
+
+    /**
+     * Fetch PhonePe Auth Token
+     * POST /v1/oauth/token
+     * Uses client credentials grant type
+     */
+    suspend fun phonePeGetAuthToken(
+        clientId: String,
+        clientSecret: String,
+        clientVersion: String
+    ): dev.infa.page3.data.model.PhonePeAuthTokenResponse {
+        val url = "$phonePeAuthBase/v1/oauth/token"
+
+        return logApiCall(
+            apiName = "phonePeGetAuthToken",
+            url = url,
+            method = "POST",
+            headers = mapOf("Content-Type" to "application/x-www-form-urlencoded")
+        ) {
+            httpClient.post(url) {
+                contentType(ContentType.Application.FormUrlEncoded)
+                setBody(
+                    io.ktor.http.Parameters.build {
+                        append("client_id", clientId)
+                        append("client_version", clientVersion)
+                        append("client_secret", clientSecret)
+                        append("grant_type", "client_credentials")
+                    }.formUrlEncode()
+                )
+            }
+        }
+    }
+
+    /**
+     * Create PhonePe SDK Order
+     * POST /checkout/v2/sdk/order  (Android SDK flow)
+     * Requires auth token in Authorization header
+     *
+     * Reference:
+     *  - Android SDK Intro / Integration Steps / SDK Setup
+     *    (`https://developer.phonepe.com/payment-gateway/mobile-app-integration/standard-checkout-mobile/android-sdk/integration-steps`)
+     */
+    suspend fun phonePeCreateOrder(
+        authToken: String,
+        request: dev.infa.page3.data.model.PhonePeCreateOrderRequest
+    ): dev.infa.page3.data.model.PhonePeCreateOrderResponse {
+        val url = "$phonePeCheckoutBase/checkout/v2/sdk/order"
+
+        return logApiCall(
+            apiName = "phonePeCreateOrder",
+            url = url,
+            method = "POST",
+            headers = mapOf(
+                "Authorization" to "O-Bearer $authToken",
+                "Content-Type" to "application/json"
+            ),
+            requestBody = request
+        ) {
+            httpClient.post(url) {
+                header("Authorization", "O-Bearer $authToken")
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }
+        }
+    }
+
+    /**
+     * Check PhonePe Order Status
+     * GET /checkout/v2/order/{merchantOrderId}/status
+     * Requires auth token in Authorization header
+     */
+    suspend fun phonePeCheckOrderStatus(
+        authToken: String,
+        merchantOrderId: String
+    ): dev.infa.page3.data.model.PhonePeOrderStatusResponse {
+        val url = "$phonePeCheckoutBase/checkout/v2/order/$merchantOrderId/status?details=false"
+
+        return logApiCall(
+            apiName = "phonePeCheckOrderStatus",
+            url = url,
+            method = "GET",
+            headers = mapOf("Authorization" to "O-Bearer $authToken")
+        ) {
+            httpClient.get(url) {
+                header("Authorization", "O-Bearer $authToken")
+                contentType(ContentType.Application.Json)
             }
         }
     }
