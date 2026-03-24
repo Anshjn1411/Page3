@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -61,7 +62,7 @@ fun BottleAlarmEditorScreen(
             Spacer(Modifier.height(16.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { navigator.pop() }) {
-                    Icon(Icons.Default.ArrowBack, null, tint = Color.White.copy(alpha = 0.7f))
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White.copy(alpha = 0.7f))
                 }
                 Spacer(Modifier.width(8.dp))
                 Text(
