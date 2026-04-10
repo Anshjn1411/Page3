@@ -19,6 +19,8 @@ kotlin {
     }
     val xcframework = XCFramework("ComposeApp")
 
+    val qcBandSdkFrameworkDir = rootProject.file("QCBandSDKDemo 2/QCBandSDK.framework").parentFile.absolutePath
+
     listOf(
         iosX64(),      // Intel simulator
         iosArm64(),    // Real devices
@@ -35,6 +37,17 @@ kotlin {
             // Export dependencies
             export(libs.androidx.lifecycle.viewmodelCompose)
             export(libs.androidx.lifecycle.runtimeCompose)
+
+            // Link QCBandSDK framework
+            linkerOpts("-F$qcBandSdkFrameworkDir", "-framework", "QCBandSDK", "-ObjC")
+        }
+
+        // cinterop for QCBandSDK Objective-C framework
+        iosTarget.compilations.getByName("main") {
+            cinterops.create("QCBandSDK") {
+                defFile = project.file("src/nativeInterop/cinterop/QCBandSDK.def")
+                compilerOpts("-F$qcBandSdkFrameworkDir")
+            }
         }
     }
 
@@ -79,6 +92,18 @@ kotlin {
 
                 implementation("io.ktor:ktor-client-okhttp:3.3.3")
                 implementation(files("libs/QWatchPro__sdk_20251120.aar"))
+                // VeePoo SDK (V-Band smart watch)
+                implementation(files("libs/vpprotocol-2.3.27.15.aar"))
+                implementation(files("libs/vpbluetooth-1.18.aar"))
+                implementation(files("libs/libble-0.5.aar"))
+                implementation(files("libs/libcomx-0.5.jar"))
+                implementation(files("libs/libdfu-1.5.aar"))
+                implementation(files("libs/libfastdfu-0.5.aar"))
+                // JieLi OTA/Watch libs (required by VeePoo SDK internally)
+                implementation(files("libs/jl_bt_ota_V1.10.0_10931-release.aar"))
+                implementation(files("libs/jl_rcsp_V0.7.2_527-release.aar"))
+                implementation(files("libs/JL_Watch_V1.13.1_11214-release.aar"))
+                implementation(files("libs/BmpConvert_V1.6.0_10604-release.aar"))
                 implementation("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
                 implementation("org.greenrobot:eventbus:3.3.1")
                 implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
@@ -120,8 +145,8 @@ android {
         applicationId = "dev.infa.page3"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 19
-        versionName = "1.7"
+        versionCode = 22
+        versionName = "2.2"
 
         // PhonePe SDK credentials from gradle.properties
         buildConfigField("String", "PHONEPE_CLIENT_ID", "\"${project.findProperty("PHONEPE_CLIENT_ID") ?: ""}\"")

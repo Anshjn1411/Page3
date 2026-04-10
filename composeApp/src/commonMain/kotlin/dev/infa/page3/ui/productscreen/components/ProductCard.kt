@@ -1,6 +1,5 @@
 package dev.infa.page3.ui.productscreen.components
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -30,12 +29,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.seiko.imageloader.rememberImagePainter
 import dev.infa.page3.data.model.Product
 import org.jetbrains.compose.ui.tooling.preview.Preview
 @Composable
@@ -59,26 +56,12 @@ fun ProductCard(
                     .fillMaxWidth()
                     .height(200.dp)
             ) {
-                fun normalize(url: String?): String {
-                    if (url.isNullOrBlank()) return ""
-                    return when {
-                        url.startsWith("//") -> "https:$url"
-                        url.startsWith("/") -> "https://www.page3life.com$url"
-                        else -> url
-                    }
-                }
-
-                val rawUrl = product.images.firstOrNull()?.src
-                val imageUrl = normalize(rawUrl)
-                val painter = rememberImagePainter(imageUrl)
-
-                Image(
-                    painter = painter,
-                    contentDescription = product.shortDescription,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clickable { onClick() },
-                    contentScale = ContentScale.Crop
+                ProductImageGallery(
+                    galleryKey = product.id,
+                    imageUrls = productGalleryUrlsForCard(product.images),
+                    contentDescription = product.shortDescription ?: product.name,
+                    modifier = Modifier.fillMaxSize(),
+                    onImageAreaClick = onClick
                 )
 
                 IconButton(

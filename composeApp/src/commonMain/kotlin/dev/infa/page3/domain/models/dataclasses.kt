@@ -214,7 +214,9 @@ data class WcImage(
     val id: Int? = null,
     val src: String? = null,
     val name: String? = null,
-    val alt: String? = null
+    val alt: String? = null,
+    /** WooCommerce REST includes this; used for lighter grid thumbnails. */
+    val thumbnail: String? = null
 )
 
 @Serializable

@@ -1,6 +1,7 @@
 package dev.infa.page3.navigation
 
 import dev.infa.page3.SDK.connection.ConnectionManager
+import dev.infa.page3.SDK.`V-Band`.VBandManager
 import dev.infa.page3.SDK.platform.SyncManager
 import dev.infa.page3.SDK.platform.InstantMeasures
 import dev.infa.page3.SDK.platform.ContinuousMonitoring
@@ -26,6 +27,7 @@ actual suspend fun initializePlatform() {
             val syncManager = SyncManager()
             val instantMeasurement = InstantMeasures()
             val continuousMonitoring = ContinuousMonitoring()
+            val vBandManager = VBandManager()
 
             // Initialize all ViewModels
             AppViewModels.init(
@@ -36,6 +38,7 @@ actual suspend fun initializePlatform() {
                 syncManager = syncManager,
                 instantMeasures = instantMeasurement,
                 continuousMonitoring = continuousMonitoring,
+                vBandManager = vBandManager,
             )
 
             println("✅ iOS Platform initialized successfully")

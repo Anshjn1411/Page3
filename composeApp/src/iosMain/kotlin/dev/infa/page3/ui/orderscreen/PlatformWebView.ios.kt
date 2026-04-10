@@ -35,22 +35,22 @@ actual fun PlatformWebView(
         WebViewNavigationDelegate(onPaymentSuccess, onPaymentFailed, onUrlChanged)
     }
 
-    UIKitView(
-        modifier = Modifier.fillMaxSize(),
-        factory = {
-            val config = WKWebViewConfiguration().apply {
-                defaultWebpagePreferences = WKWebpagePreferences().apply {
-                    allowsContentJavaScript = true
-                }
-            }
-            WKWebView(frame = CGRectZero.readValue(), configuration = config).apply {
-                this.navigationDelegate = navigationDelegate
-                val nsUrl = NSURL.URLWithString(url) ?: return@apply
-                val request = NSMutableURLRequest.requestWithURL(nsUrl)
-                loadRequest(request)
-            }
-        }
-    )
+//    UIKitView(
+//        modifier = Modifier.fillMaxSize(),
+//        factory = {
+//            val config = WKWebViewConfiguration().apply {
+//                defaultWebpagePreferences = WKWebpagePreferences().apply {
+//                    allowsContentJavaScript = true
+//                }
+//            }
+////            WKWebView(frame = CGRectZero, configuration = config).apply {
+////                this.navigationDelegate = navigationDelegate
+////                val nsUrl = NSURL.URLWithString(url) ?: return@apply
+////                val request = NSMutableURLRequest.requestWithURL(nsUrl)
+////                loadRequest(request)
+////            }
+//        }
+//    )
 }
 
 /**

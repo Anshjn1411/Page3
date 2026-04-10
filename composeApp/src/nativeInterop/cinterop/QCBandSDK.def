@@ -1,0 +1,6 @@
+language = Objective-C
+package = cocoapods.QCBandSDK
+modules = QCBandSDK
+
+compilerOpts = -framework QCBandSDK
+linkerOpts = -framework QCBandSDK -framework CoreBluetooth -ObjC

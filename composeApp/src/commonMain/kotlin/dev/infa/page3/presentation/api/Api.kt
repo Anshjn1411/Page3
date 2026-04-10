@@ -1005,6 +1005,7 @@ class ApiService {
         }
     }
 
+    /** Fetches one WooCommerce product; response includes `images[]` (full gallery: `src`, `thumbnail`, etc.). */
     suspend fun wcGetProduct(productId: Int): Product {
         val url = "$wcApiBase/products/$productId".withAuth()
 

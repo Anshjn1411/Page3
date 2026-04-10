@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.navigator.Navigator
 import dev.infa.page3.SDK.bottle.navigation.BottleDashboardScreenNav
+import dev.infa.page3.SDK.`V-Band`.navigation.VBandDashboardScreenNav
 import dev.infa.page3.SDK.ui.navigation.HomeScreenSDK
 import dev.infa.page3.navigation.*
 import dev.infa.page3.presentation.uiSatateClaases.ListUiState
@@ -76,6 +77,8 @@ import page3.composeapp.generated.resources.ring
 import dev.infa.page3.ui.components.LocalAppNavVisibility
 import dev.infa.page3.ui.components.AppFloatingNavBottomPadding
 import dev.infa.page3.ui.components.ProvideAppBottomNav
+import dev.infa.page3.ui.productscreen.components.ProductCarouselScreen
+import page3.composeapp.generated.resources.vband
 
 
 // ─── Palette ──────────────────────────────────────────────────────────────────────
@@ -108,9 +111,10 @@ private data class DeviceSlide(
 fun ConnectToPage3Section(
     onRingClick: () -> Unit,
     onBottleClick: () -> Unit,
+    onVBandClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val slides = remember(onRingClick, onBottleClick) {
+    val slides = remember(onRingClick, onBottleClick, onVBandClick) {
         listOf(
             DeviceSlide(
                 imageRes = Res.drawable.ring,
@@ -131,6 +135,16 @@ fun ConnectToPage3Section(
                 gradEnd = BottleGrad2,
                 accentColor = Color(0xFF81D4FA),
                 onClick = onBottleClick
+            ),
+            DeviceSlide(
+                imageRes = Res.drawable.vband,   // reuse ring as placeholder; shows watch emoji in the UI
+                title = "V-Band",
+                subtitle = "Smart Watch & Fitness",
+                tag = "V-BAND",
+                gradStart = Color(0xFF26A69A),
+                gradEnd = Color(0xFF00695C),
+                accentColor = Color(0xFF80CBC4),
+                onClick = onVBandClick
             )
         )
     }
@@ -562,10 +576,17 @@ fun MainScreen(
                                             },
                                             onBottleClick = {
                                                 navigator.push(BottleDashboardScreenNav())
+                                            },
+                                            onVBandClick = {
+                                                navigator.push(VBandDashboardScreenNav())
                                             }
                                         )
                                         Spacer(modifier = Modifier.height(16.dp))
                                     }
+                                    item{
+                                        ProductCarouselScreen()
+                                    }
+
 
                                     item {
                                         AppFooter()

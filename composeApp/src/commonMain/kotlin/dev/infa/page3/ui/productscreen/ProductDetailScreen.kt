@@ -6,7 +6,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -73,7 +72,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.navigator.Navigator
-import com.seiko.imageloader.rememberImagePainter
+import dev.infa.page3.ui.productscreen.components.ProductImageGallery
+import dev.infa.page3.ui.productscreen.components.productGalleryUrlsForDetail
 import dev.infa.page3.data.model.Product
 import dev.infa.page3.data.model.WcAttributes
 import dev.infa.page3.data.remote.SessionManager
@@ -302,30 +302,19 @@ fun ProductDetailsTab(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
     ) {
-        // Product Image
-        fun normalize(url: String?): String {
-            if (url.isNullOrBlank()) return ""
-            return when {
-                url.startsWith("//") -> "https:$url"
-                url.startsWith("/") -> "https://www.page3life.com$url"
-                else -> url
-            }
-        }
-
-        val painter = rememberImagePainter(
-            url = normalize(product.images.firstOrNull()?.src)
-        )
-
+        // Product image gallery (WooCommerce `images[]`)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(400.dp)
         ) {
-            Image(
-                painter = painter,
+            ProductImageGallery(
+                galleryKey = product.id,
+                imageUrls = productGalleryUrlsForDetail(product.images),
                 contentDescription = product.name,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.Crop,
+                onImageAreaClick = null
             )
         }
 

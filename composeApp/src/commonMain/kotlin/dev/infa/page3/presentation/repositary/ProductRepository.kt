@@ -2,6 +2,7 @@ package dev.infa.page3.presentation.repositary
 
 import dev.infa.page3.data.model.MultipleProductsRequest
 import dev.infa.page3.data.model.Product
+import dev.infa.page3.data.model.WcImage
 import dev.infa.page3.data.model.WcProductCreateRequest
 import dev.infa.page3.data.model.WcProductUpdateRequest
 import dev.infa.page3.data.remote.SessionManager
@@ -13,6 +14,25 @@ class ProductRepository(
     private val sessionManager: SessionManager
 )
 {
+
+    private fun normalizeWcImageUrl(url: String?): String {
+        val raw = url ?: ""
+        return when {
+            raw.startsWith("//") -> "https:$raw"
+            raw.startsWith("/") -> "https://www.page3life.com$raw"
+            else -> raw
+        }
+    }
+
+    private fun normalizeWcImage(img: WcImage): WcImage = img.copy(
+        src = normalizeWcImageUrl(img.src),
+        thumbnail = img.thumbnail?.takeIf { it.isNotBlank() }?.let { normalizeWcImageUrl(it) }
+    )
+
+    private fun productWithNormalizedImages(p: Product): Product {
+        val fixedImages = p.images.map { normalizeWcImage(it) }
+        return p.copy(images = fixedImages)
+    }
 
     // Simple in-memory caches
     private val productCache: MutableMap<Int, Product> = mutableMapOf()
@@ -40,18 +60,9 @@ class ProductRepository(
             val cacheKey = "p=$page|s=$perPage|c=${categoryId ?: "-"}|q=${search ?: "-"}"
             listCache[cacheKey]?.let { return it }
 
-            // Ensure each product has fully qualified image URLs and cache
+            // Ensure each product has fully qualified image (and thumbnail) URLs and cache
             val result = api.wcListProducts(page = page, perPage = perPage, categoryId = categoryId, search = search).map { p ->
-                val fixedImages = p.images.map { img ->
-                    val src = img.src ?: ""
-                    val normalized = when {
-                        src.startsWith("//") -> "https:$src"
-                        src.startsWith("/") -> "https://www.page3life.com$src"
-                        else -> src
-                    }
-                    img.copy(src = normalized)
-                }
-                val fixed = p.copy(images = fixedImages)
+                val fixed = productWithNormalizedImages(p)
                 productCache[p.id] = fixed
                 fixed
             }
@@ -64,7 +75,7 @@ class ProductRepository(
 
     suspend fun searchProducts(search: String, page: Int = 1, perPage: Int = 20): List<Product> {
         return try {
-            api.wcListProducts(page = page, perPage = perPage, search = search)
+            api.wcListProducts(page = page, perPage = perPage, search = search).map { productWithNormalizedImages(it) }
         } catch (e: Exception) {
             emptyList()
         }
@@ -73,7 +84,9 @@ class ProductRepository(
     suspend fun getProductsByCategory(categoryId: String): List<Product> {
         return try {
             val catId = categoryId.toIntOrNull()
-            if (catId != null) api.wcListProducts(categoryId = catId) else emptyList()
+            if (catId != null) {
+                api.wcListProducts(categoryId = catId).map { productWithNormalizedImages(it) }
+            } else emptyList()
         } catch (e: Exception) {
             emptyList()
         }
@@ -83,7 +96,9 @@ class ProductRepository(
         return try {
             // WooCommerce doesn't have subcategory endpoint; categories are hierarchical
             val catId = subCategoryId.toIntOrNull()
-            if (catId != null) api.wcListProducts(categoryId = catId) else emptyList()
+            if (catId != null) {
+                api.wcListProducts(categoryId = catId).map { productWithNormalizedImages(it) }
+            } else emptyList()
         } catch (e: Exception) {
             emptyList()
         }
@@ -93,16 +108,7 @@ class ProductRepository(
         return try {
             val id = productId.toIntOrNull() ?: return null
             productCache[id] ?: api.wcGetProduct(id).let { p ->
-                val fixedImages = p.images.map { img ->
-                    val src = img.src ?: ""
-                    val normalized = when {
-                        src.startsWith("//") -> "https:$src"
-                        src.startsWith("/") -> "https://www.page3life.com$src"
-                        else -> src
-                    }
-                    img.copy(src = normalized)
-                }
-                val fixed = p.copy(images = fixedImages)
+                val fixed = productWithNormalizedImages(p)
                 productCache[id] = fixed
                 fixed
             }
@@ -139,6 +145,7 @@ class ProductRepository(
         // WooCommerce supports ?on_sale=true
         return try {
             api.wcListProducts(page = 1, perPage = limit, search = null)
+                .map { productWithNormalizedImages(it) }
                 .filter { (it.salePrice ?: it.price)?.isNotBlank() == true && (it.salePrice ?: "") != "0" }
         } catch (e: Exception) { emptyList() }
     }

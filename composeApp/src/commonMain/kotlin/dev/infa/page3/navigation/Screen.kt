@@ -6,6 +6,8 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import androidx.compose.runtime.*
 import dev.infa.page3.SDK.bottle.IBottleSyncManager
 import dev.infa.page3.SDK.bottle.viewmodel.BottleViewModel
+import dev.infa.page3.SDK.`V-Band`.VBandManager
+import dev.infa.page3.SDK.`V-Band`.viewmodel.VBandViewModel
 import dev.infa.page3.SDK.connection.ConnectionManager
 import dev.infa.page3.SDK.repository.ConnectionRepository
 import dev.infa.page3.SDK.server.HealthDataRepository
@@ -563,6 +565,10 @@ object AppViewModels {
     lateinit var bottleViewModel: BottleViewModel
         private set
 
+    // V-Band ViewModel
+    lateinit var vBandViewModel: VBandViewModel
+        private set
+
 
     // E-commerce ViewModels
     lateinit var authViewModel: AuthViewModel
@@ -586,7 +592,8 @@ object AppViewModels {
         syncManager: ISyncManager,
         instantMeasures: IInstantMeasures,
         continuousMonitoring: IContinuousMonitoring,
-        bottleSyncManager: IBottleSyncManager? = null
+        bottleSyncManager: IBottleSyncManager? = null,
+        vBandManager: VBandManager? = null
     ) {
         if (isInitialized) {
             println("⚠️ Already initialized")
@@ -609,6 +616,11 @@ object AppViewModels {
             // Bottle ViewModel
             if (bottleSyncManager != null) {
                 bottleViewModel = BottleViewModel(bottleSyncManager)
+            }
+
+            // V-Band ViewModel
+            if (vBandManager != null) {
+                vBandViewModel = VBandViewModel(vBandManager)
             }
 
             // E-commerce ViewModels

@@ -14,7 +14,7 @@ actual class ProfileManager {
         TODO("Not yet implemented")
     }
 
-    actual suspend fun updateUnitSystem(unitSystem: UnitSystem): Boolean {
+    actual suspend fun updateUnitSystem(unitSystem: UnitSystem, currentTimeFormat: TimeFormat): Boolean {
         TODO("Not yet implemented")
     }
 

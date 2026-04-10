@@ -16,6 +16,7 @@ import dev.infa.page3.presentation.uiSatateClaases.OperationUiState
 import dev.infa.page3.presentation.uiSatateClaases.SingleUiState
 import kotlinx.coroutines.withContext
 
+/** Loads product data including WooCommerce `images` for gallery UIs. */
 class ProductViewModel(
     private val repository: ProductRepository
 ) {

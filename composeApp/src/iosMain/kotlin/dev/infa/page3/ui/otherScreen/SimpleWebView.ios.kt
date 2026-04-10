@@ -21,19 +21,19 @@ actual fun SimpleWebView(
     url: String,
     modifier: Modifier
 ) {
-    UIKitView(
-        modifier = modifier,
-        factory = {
-            val config = WKWebViewConfiguration().apply {
-                defaultWebpagePreferences = WKWebpagePreferences().apply {
-                    allowsContentJavaScript = true
-                }
-            }
-            WKWebView(frame = CGRectZero.readValue(), configuration = config).apply {
-                val nsUrl = NSURL.URLWithString(url) ?: return@apply
-                val request = NSMutableURLRequest.requestWithURL(nsUrl)
-                loadRequest(request)
-            }
-        }
-    )
+//    UIKitView(
+//        modifier = modifier,
+//        factory = {
+//            val config = WKWebViewConfiguration().apply {
+//                defaultWebpagePreferences = WKWebpagePreferences().apply {
+//                    allowsContentJavaScript = true
+//                }
+//            }
+//            WKWebView(frame = CGRectZero, configuration = config).apply {
+//                val nsUrl = NSURL.URLWithString(url) ?: return@apply
+//                val request = NSMutableURLRequest.requestWithURL(nsUrl)
+//                loadRequest(request)
+//            }
+//        }
+//    )
 }
