@@ -2,7 +2,9 @@ package dev.infa.page3.presentation.repository
 
 import dev.infa.page3.data.model.*
 import dev.infa.page3.data.remote.SessionManager
-import dev.infa.page3.presentation.api.ApiService
+import dev.infa.page3.network.NetworkConnectivity
+import dev.infa.page3.network.requireNetwork
+import dev.infa.page3.presentation.api.*
 
 /**
  * AuthRepository - Handles authentication flow
@@ -17,13 +19,15 @@ import dev.infa.page3.presentation.api.ApiService
  */
 class AuthRepository(
     private val api: ApiService,
-    private val sessionManager: SessionManager
+    private val sessionManager: SessionManager,
+    private val network: NetworkConnectivity
 ) {
 
     // ======================== OTP FLOW ========================
 
     suspend fun sendOtp(phone: String): Result<SendOtpResponse> {
         return try {
+            network.requireNetwork()
             val response = api.sendOTP(phone)
             if (response.success) {
                 Result.success(response)
@@ -37,6 +41,7 @@ class AuthRepository(
 
     suspend fun resendOtp(phone: String): Result<SendOtpResponse> {
         return try {
+            network.requireNetwork()
             val response = api.resendOTP(phone)
             if (response.success) {
                 Result.success(response)
@@ -50,6 +55,7 @@ class AuthRepository(
 
     suspend fun verifyOtp(phone: String, otp: String): Result<VerifyOtpResponse> {
         return try {
+            network.requireNetwork()
             val response = api.verifyOTP(phone, otp)
 
             if (response.success) {
@@ -77,6 +83,7 @@ class AuthRepository(
         shipping: WcAddress? = null
     ): Result<CompleteProfileResponse> {
         return try {
+            network.requireNetwork()
             val response = api.completeProfile(
                 phone = phone,
                 email = email,
@@ -110,6 +117,7 @@ class AuthRepository(
         shipping: WcAddress? = null
     ): Result<UpdateProfileResponse> {
         return try {
+            network.requireNetwork()
             val token = sessionManager.getAuthToken()
                 ?: return Result.failure(Exception("Not authenticated"))
 
@@ -136,6 +144,7 @@ class AuthRepository(
 
     suspend fun getCurrentUser(): Result<WcCustomer> {
         return try {
+            network.requireNetwork()
             val token = sessionManager.getAuthToken()
                 ?: return Result.failure(Exception("Not authenticated"))
 
@@ -161,7 +170,9 @@ class AuthRepository(
             // Try server logout
             if (token != null) {
                 try {
-                    api.logout(token)
+                    if (network.isConnected()) {
+                        api.logout(token)
+                    }
                 } catch (e: Exception) {
                     // Continue even if server logout fails
                 }

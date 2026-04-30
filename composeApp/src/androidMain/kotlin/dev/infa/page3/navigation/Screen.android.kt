@@ -1,8 +1,12 @@
 package dev.infa.page3.navigation
 
 import android.content.Context
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import dev.infa.page3.di.ecommerceModule
+import dev.infa.page3.network.AndroidNetworkConnectivity
+import dev.infa.page3.network.NetworkConnectivity
+import org.koin.android.ext.koin.androidContext
+import org.koin.core.context.startKoin
+import org.koin.dsl.module
 import dev.infa.page3.SDK.bottle.BottleSyncManager
 import dev.infa.page3.SDK.`V-Band`.VBandManager
 import dev.infa.page3.SDK.connection.ConnectionManager
@@ -24,6 +28,20 @@ actual suspend fun initializePlatform() {
     withContext(Dispatchers.IO) {
         val context = PlatformContext.get()
         ConnectionPlatform.initialize(context as Context)
+
+        if (org.koin.core.context.GlobalContext.getOrNull() == null) {
+            startKoin {
+                androidContext((context as Context).applicationContext)
+                modules(
+                    module {
+                        single<NetworkConnectivity> {
+                            AndroidNetworkConnectivity(get())
+                        }
+                    },
+                    ecommerceModule()
+                )
+            }
+        }
 
         // Create platform managers
         val connectionManager = ConnectionManager().apply { initialize() }

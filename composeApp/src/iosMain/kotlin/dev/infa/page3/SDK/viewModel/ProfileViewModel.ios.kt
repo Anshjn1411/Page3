@@ -5,29 +5,33 @@ import dev.infa.page3.SDK.data.TimeFormat
 import dev.infa.page3.SDK.data.TouchSettings
 import dev.infa.page3.SDK.data.UnitSystem
 
+/**
+ * iOS stub for ProfileManager.
+ * SDK disabled – all methods return safe defaults.
+ */
 actual class ProfileManager {
     actual suspend fun findMyDevice(): Boolean {
-        TODO("Not yet implemented")
+        return false
     }
 
     actual suspend fun getDeviceInfo(): DeviceInfo? {
-        TODO("Not yet implemented")
+        return null
     }
 
     actual suspend fun updateUnitSystem(unitSystem: UnitSystem, currentTimeFormat: TimeFormat): Boolean {
-        TODO("Not yet implemented")
+        return false
     }
 
     actual suspend fun updateTimeFormat(timeFormat: TimeFormat): Boolean {
-        TODO("Not yet implemented")
+        return false
     }
 
     actual suspend fun toggleLowBatteryPrompt(enabled: Boolean): Boolean {
-        TODO("Not yet implemented")
+        return false
     }
 
     actual suspend fun loadTouchSettings(): TouchSettings? {
-        TODO("Not yet implemented")
+        return null
     }
 
     actual suspend fun updateTouchSettings(
@@ -35,7 +39,7 @@ actual class ProfileManager {
         isTouch: Boolean,
         strength: Int
     ): Boolean {
-        TODO("Not yet implemented")
+        return false
     }
 
     actual fun cleanup() {

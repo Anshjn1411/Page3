@@ -16,10 +16,16 @@ import platform.UIKit.*
 
 @OptIn(ExperimentalForeignApi::class)
 @Composable
-actual fun LoopingVideoBackground(modifier: Modifier ) {
+actual fun LoopingVideoBackground(modifier: Modifier , videoUrl: String?   ) {
     val player = remember {
-        val url = NSURL(string = "https://raw.githubusercontent.com/Anshjn1411/medicCodec/main/WhatsApp%20Video%202025-12-08%20at%2017.09.02.mp4")
-        val item = AVPlayerItem(uRL = url!!)
+        var url = ""
+
+        if(videoUrl==null) {
+            url = "https://raw.githubusercontent.com/Anshjn1411/medicCodec/main/WhatsApp%20Video%202025-12-08%20at%2017.09.02.mp4"
+        }else{
+            url = videoUrl
+        }
+        val item = AVPlayerItem(uRL = NSURL(string = url))
         AVPlayer(playerItem = item).apply {
             actionAtItemEnd = AVPlayerActionAtItemEndNone
             volume = 0f

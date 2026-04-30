@@ -8,8 +8,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import dev.infa.page3.presentation.uiSatateClaases.ListUiState
 import dev.infa.page3.presentation.uiSatateClaases.OperationUiState
 
@@ -28,39 +28,33 @@ class WishlistViewModel(
     val wishlistProductIds: StateFlow<Set<Int>> = _wishlistProductIds.asStateFlow()
 
     init {
-        loadWishlist()
+        viewModelScope.launch {
+            wishlistRepository.wishlistItems.collect { items ->
+                _wishlistProductIds.value = items.map { it.id }.toSet()
+                _wishlistState.value = when {
+                    items.isEmpty() -> ListUiState.Empty
+                    else -> ListUiState.Success(items)
+                }
+            }
+        }
     }
 
     fun loadWishlist() {
-        viewModelScope.launch {
-            _wishlistState.value = ListUiState.Loading
-            try {
-                wishlistRepository.getAllWishlistItems().collect { items ->
-                    if (items.isEmpty()) {
-                        _wishlistState.value = ListUiState.Empty
-                        _wishlistProductIds.value = emptySet()
-                    } else {
-                        _wishlistState.value = ListUiState.Success(items)
-                        _wishlistProductIds.value = items.map { it.id }.toSet()
-                    }
-                }
-            } catch (e: Exception) {
-                _wishlistState.value = ListUiState.Error(e.message ?: "Unknown error")
-            }
-        }
+        // State is driven by [WishlistRepository.wishlistItems]; no-op for API compatibility.
     }
 
     fun toggleWishlist(product: Product) {
         viewModelScope.launch {
             _actionState.value = OperationUiState.Loading
             try {
-                val isInWishlist = _wishlistProductIds.value.contains(product.id)
-                if (isInWishlist) {
-                    wishlistRepository.removeFromWishlist(product.id)
-                } else {
-                    wishlistRepository.addToWishlist(product)
+                withContext(Dispatchers.Default) {
+                    val isInWishlist = _wishlistProductIds.value.contains(product.id)
+                    if (isInWishlist) {
+                        wishlistRepository.removeFromWishlist(product.id)
+                    } else {
+                        wishlistRepository.addToWishlist(product)
+                    }
                 }
-                loadWishlist()
                 _actionState.value = OperationUiState.Success
             } catch (e: Exception) {
                 _actionState.value = OperationUiState.Error(e.message ?: "Unknown error")

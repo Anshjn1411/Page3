@@ -1,6 +1,7 @@
 package dev.infa.page3.presentation.viewModel
 
 import dev.infa.page3.data.model.WcCategory
+import dev.infa.page3.network.NetworkException
 import dev.infa.page3.presentation.repositary.CategoryRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -9,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import dev.infa.page3.presentation.uiSatateClaases.ListUiState
 import dev.infa.page3.presentation.uiSatateClaases.OperationUiState
 import dev.infa.page3.presentation.uiSatateClaases.SingleUiState
@@ -48,13 +50,17 @@ class CategoryViewModel(
         viewModelScope.launch {
             _categoriesState.value = ListUiState.Loading
             try {
-                val categories = repository.getAllCategories()
+                val categories = withContext(Dispatchers.Default) {
+                    repository.getAllCategories()
+                }
                 cachedCategories = categories
                 isCategoriesLoaded = true
                 _categoriesState.value = when {
                     categories.isEmpty() -> ListUiState.Empty
                     else -> ListUiState.Success(categories)
                 }
+            } catch (e: NetworkException) {
+                _categoriesState.value = ListUiState.Error(e.message ?: NetworkException.DEFAULT_MESSAGE)
             } catch (e: Exception) {
                 _categoriesState.value = ListUiState.Error("Failed to load categories: ${e.message}")
             }
@@ -66,11 +72,15 @@ class CategoryViewModel(
         viewModelScope.launch {
             _categoriesState.value = ListUiState.Loading
             try {
-                val categories = repository.getAllCategories()
+                val categories = withContext(Dispatchers.Default) {
+                    repository.getAllCategories()
+                }
                 cachedCategories = categories
                 isCategoriesLoaded = true
                 _categoriesState.value = if (categories.isEmpty()) ListUiState.Empty
                 else ListUiState.Success(categories)
+            } catch (e: NetworkException) {
+                _categoriesState.value = ListUiState.Error(e.message ?: NetworkException.DEFAULT_MESSAGE)
             } catch (e: Exception) {
                 _categoriesState.value = ListUiState.Error("Failed to refresh categories: ${e.message}")
             }
@@ -81,12 +91,16 @@ class CategoryViewModel(
         viewModelScope.launch {
             _selectedCategoryState.value = SingleUiState.Loading
             try {
-                val category = repository.getCategoryById(categoryId)
+                val category = withContext(Dispatchers.Default) {
+                    repository.getCategoryById(categoryId)
+                }
                 _selectedCategoryState.value = if (category != null) {
                     SingleUiState.Success(category)
                 } else {
                     SingleUiState.Error("Category not found")
                 }
+            } catch (e: NetworkException) {
+                _selectedCategoryState.value = SingleUiState.Error(e.message ?: NetworkException.DEFAULT_MESSAGE)
             } catch (e: Exception) {
                 _selectedCategoryState.value = SingleUiState.Error("Failed to load category: ${e.message}")
             }

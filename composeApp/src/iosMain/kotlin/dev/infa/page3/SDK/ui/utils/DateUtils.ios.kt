@@ -1,7 +1,6 @@
 package dev.infa.page3.SDK.ui.utils
 
 import platform.Foundation.*
-import kotlinx.cinterop.toKString
 
 actual object DateUtils {
 

@@ -6,12 +6,16 @@ import dev.infa.page3.data.model.WcImage
 import dev.infa.page3.data.model.WcProductCreateRequest
 import dev.infa.page3.data.model.WcProductUpdateRequest
 import dev.infa.page3.data.remote.SessionManager
-import dev.infa.page3.presentation.api.ApiService
+import dev.infa.page3.network.NetworkConnectivity
+import dev.infa.page3.network.NetworkException
+import dev.infa.page3.network.requireNetwork
+import dev.infa.page3.presentation.api.*
 
 
 class ProductRepository(
     private val api: ApiService,
-    private val sessionManager: SessionManager
+    private val sessionManager: SessionManager,
+    private val network: NetworkConnectivity
 )
 {
 
@@ -57,6 +61,7 @@ class ProductRepository(
 
     suspend fun getAllProducts(page: Int = 1, perPage: Int = 20, categoryId: Int? = null, search: String? = null): List<Product> {
         return try {
+            network.requireNetwork()
             val cacheKey = "p=$page|s=$perPage|c=${categoryId ?: "-"}|q=${search ?: "-"}"
             listCache[cacheKey]?.let { return it }
 
@@ -68,6 +73,8 @@ class ProductRepository(
             }
             listCache[cacheKey] = result
             result
+        } catch (e: NetworkException) {
+            throw e
         } catch (e: Exception) {
             emptyList()
         }
@@ -75,30 +82,38 @@ class ProductRepository(
 
     suspend fun searchProducts(search: String, page: Int = 1, perPage: Int = 20): List<Product> {
         return try {
+            network.requireNetwork()
             api.wcListProducts(page = page, perPage = perPage, search = search).map { productWithNormalizedImages(it) }
+        } catch (e: NetworkException) {
+            throw e
         } catch (e: Exception) {
             emptyList()
         }
     }
 
-    suspend fun getProductsByCategory(categoryId: String): List<Product> {
+    suspend fun getProductsByCategory(categoryId: String, page: Int = 1, perPage: Int = 20): List<Product> {
         return try {
+            network.requireNetwork()
             val catId = categoryId.toIntOrNull()
             if (catId != null) {
-                api.wcListProducts(categoryId = catId).map { productWithNormalizedImages(it) }
+                api.wcListProducts(page = page, perPage = perPage, categoryId = catId).map { productWithNormalizedImages(it) }
             } else emptyList()
+        } catch (e: NetworkException) {
+            throw e
         } catch (e: Exception) {
             emptyList()
         }
     }
 
-    suspend fun getProductsBySubCategory(subCategoryId: String): List<Product> {
+    suspend fun getProductsBySubCategory(subCategoryId: String, page: Int = 1, perPage: Int = 20): List<Product> {
         return try {
-            // WooCommerce doesn't have subcategory endpoint; categories are hierarchical
+            network.requireNetwork()
             val catId = subCategoryId.toIntOrNull()
             if (catId != null) {
-                api.wcListProducts(categoryId = catId).map { productWithNormalizedImages(it) }
+                api.wcListProducts(page = page, perPage = perPage, categoryId = catId).map { productWithNormalizedImages(it) }
             } else emptyList()
+        } catch (e: NetworkException) {
+            throw e
         } catch (e: Exception) {
             emptyList()
         }
@@ -107,11 +122,15 @@ class ProductRepository(
     suspend fun getProductById(productId: String): Product? {
         return try {
             val id = productId.toIntOrNull() ?: return null
-            productCache[id] ?: api.wcGetProduct(id).let { p ->
+            productCache[id]?.let { return it }
+            network.requireNetwork()
+            api.wcGetProduct(id).let { p ->
                 val fixed = productWithNormalizedImages(p)
                 productCache[id] = fixed
                 fixed
             }
+        } catch (e: NetworkException) {
+            throw e
         } catch (e: Exception) {
             null
         }
@@ -142,12 +161,16 @@ class ProductRepository(
     }
 
     suspend fun getProductsOnSale(limit: Int = 20): List<Product> {
-        // WooCommerce supports ?on_sale=true
         return try {
+            network.requireNetwork()
             api.wcListProducts(page = 1, perPage = limit, search = null)
                 .map { productWithNormalizedImages(it) }
                 .filter { (it.salePrice ?: it.price)?.isNotBlank() == true && (it.salePrice ?: "") != "0" }
-        } catch (e: Exception) { emptyList() }
+        } catch (e: NetworkException) {
+            throw e
+        } catch (e: Exception) {
+            emptyList()
+        }
     }
 
     suspend fun getProductsByPriceRange(minPrice: Double, maxPrice: Double): List<Product> {

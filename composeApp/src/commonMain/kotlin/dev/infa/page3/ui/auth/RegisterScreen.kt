@@ -21,12 +21,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.infa.page3.data.remote.SessionManager
 import dev.infa.page3.navigation.AuthManager
-import dev.infa.page3.presentation.api.ApiService
-import dev.infa.page3.presentation.repository.AuthRepository
 import dev.infa.page3.presentation.uiSatateClaases.AuthUiState
 import dev.infa.page3.presentation.viewModel.AuthViewModel
+import org.koin.mp.KoinPlatform
 import org.jetbrains.compose.resources.painterResource
 import page3.composeapp.generated.resources.Res
 import page3.composeapp.generated.resources.login
@@ -44,12 +42,7 @@ fun RegistrationScreen(
     }
 
     val viewModel: AuthViewModel = remember {
-        AuthViewModel(
-            AuthRepository(
-                ApiService(),
-                SessionManager()
-            )
-        )
+        KoinPlatform.getKoin().get()
     }
     val uiState by viewModel.uiState.collectAsState()
 

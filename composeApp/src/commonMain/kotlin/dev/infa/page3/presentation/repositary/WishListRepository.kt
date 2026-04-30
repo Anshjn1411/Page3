@@ -4,12 +4,9 @@ import com.russhwolf.settings.Settings
 import com.russhwolf.settings.get
 import com.russhwolf.settings.set
 import dev.infa.page3.data.model.Product
-import dev.infa.page3.data.model.WcImage
-import dev.infa.page3.ui.productscreen.components.ProductCard
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.map
-import kotlinx.serialization.Serializable
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -19,8 +16,11 @@ class WishlistRepository(private val settings: Settings = Settings()) {
 
     private val WISHLIST_KEY = "wishlist_items"
 
+    private val _items = MutableStateFlow(readStoredItems())
+    val wishlistItems: StateFlow<List<Product>> = _items.asStateFlow()
+
     suspend fun addToWishlist(product: Product) {
-        val current = getAllWishlistItemsOnce().toMutableList()
+        val current = _items.value.toMutableList()
         if (current.none { it.id == product.id }) {
             val minimalProduct = Product(
                 id = product.id,
@@ -31,24 +31,19 @@ class WishlistRepository(private val settings: Settings = Settings()) {
                 slug = product.slug
             )
             current.add(minimalProduct)
-            saveWishlist(current)
+            persistAndEmit(current)
         }
     }
 
     suspend fun removeFromWishlist(productId: Int) {
-        val current = getAllWishlistItemsOnce().filter { it.id != productId }
-        saveWishlist(current)
+        val current = _items.value.filter { it.id != productId }
+        persistAndEmit(current)
     }
 
-    fun getAllWishlistItems(): Flow<List<Product>> {
-        return flow { emit(getAllWishlistItemsOnce()) }
-    }
+    fun isInWishlist(productId: Int): Boolean =
+        _items.value.any { it.id == productId }
 
-    fun isInWishlist(productId: Int): Boolean {
-        return getAllWishlistItemsOnce().any { it.id == productId }
-    }
-
-    private fun getAllWishlistItemsOnce(): List<Product> {
+    private fun readStoredItems(): List<Product> {
         val json = settings[WISHLIST_KEY, "[]"]
         return try {
             Json.decodeFromString(json)
@@ -57,11 +52,12 @@ class WishlistRepository(private val settings: Settings = Settings()) {
         }
     }
 
-    private fun saveWishlist(items: List<Product>) {
+    private fun persistAndEmit(items: List<Product>) {
         settings[WISHLIST_KEY] = Json.encodeToString(items)
+        _items.value = items
     }
 
     suspend fun clearWishlist() {
-        settings[WISHLIST_KEY] = "[]"
+        persistAndEmit(emptyList())
     }
 }

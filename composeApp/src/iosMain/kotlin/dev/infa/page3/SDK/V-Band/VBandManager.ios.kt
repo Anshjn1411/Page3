@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 /**
  * iOS stub for VBandManager.
- * TODO: Implement VeePoo SDK-based BLE communication for iOS.
+ * SDK disabled – all methods are no-ops returning defaults.
  */
 actual class VBandManager : IVBandManager {
 
@@ -76,103 +76,102 @@ actual class VBandManager : IVBandManager {
     actual override val logs: StateFlow<List<String>> = _logs
 
     private val _syncState = MutableStateFlow(VBandSyncState())
-    actual override val syncState: StateFlow<VBandSyncState> = _syncState
+    override val syncState: StateFlow<VBandSyncState> = _syncState
 
     private val _syncLogs = MutableStateFlow<List<VBandSyncLogEntry>>(emptyList())
-    actual override val syncLogs: StateFlow<List<VBandSyncLogEntry>> = _syncLogs
+    override val syncLogs: StateFlow<List<VBandSyncLogEntry>> = _syncLogs
 
-    // ─── Scan ───────────────────────────────────────────────────────────────────
+    // ─── Scan (no-op) ───────────────────────────────────────────────────────────
 
-    actual override fun startScan() { TODO("iOS V-Band not yet implemented") }
-    actual override fun stopScan() { TODO("iOS V-Band not yet implemented") }
+    actual override fun startScan() { /* no-op: SDK disabled */ }
+    actual override fun stopScan() { /* no-op: SDK disabled */ }
 
-    // ─── Connection ─────────────────────────────────────────────────────────────
+    // ─── Connection (no-op) ─────────────────────────────────────────────────────
 
-    actual override fun connect(device: VBandDeviceInfo) { TODO("iOS V-Band not yet implemented") }
-    actual override fun disconnect() { TODO("iOS V-Band not yet implemented") }
+    actual override fun connect(device: VBandDeviceInfo) { /* no-op: SDK disabled */ }
+    actual override fun disconnect() { /* no-op: SDK disabled */ }
 
-    // ─── Auth ───────────────────────────────────────────────────────────────────
+    // ─── Auth (no-op) ───────────────────────────────────────────────────────────
 
-    actual override fun confirmPassword(pwd: String, is24Hour: Boolean) { TODO("iOS V-Band not yet implemented") }
+    actual override fun confirmPassword(pwd: String, is24Hour: Boolean) { /* no-op: SDK disabled */ }
 
-    // ─── Personal Info ──────────────────────────────────────────────────────────
+    // ─── Personal Info (no-op) ──────────────────────────────────────────────────
 
-    actual override fun syncPersonInfo(info: VBandPersonInfo) { TODO("iOS V-Band not yet implemented") }
+    actual override fun syncPersonInfo(info: VBandPersonInfo) { /* no-op: SDK disabled */ }
 
-    // ─── Battery ────────────────────────────────────────────────────────────────
+    // ─── Battery (no-op) ────────────────────────────────────────────────────────
 
-    actual override fun readBattery() { TODO("iOS V-Band not yet implemented") }
+    actual override fun readBattery() { /* no-op: SDK disabled */ }
 
-    // ─── Steps / Sport ──────────────────────────────────────────────────────────
+    // ─── Steps / Sport (no-op) ──────────────────────────────────────────────────
 
-    actual override fun readSportStep() { TODO("iOS V-Band not yet implemented") }
+    actual override fun readSportStep() { /* no-op: SDK disabled */ }
 
-    // ─── Daily Data ─────────────────────────────────────────────────────────────
+    // ─── Daily Data (no-op) ─────────────────────────────────────────────────────
 
-    actual override fun readAllHealthData(watchDay: Int) { TODO("iOS V-Band not yet implemented") }
-    actual override fun readOriginData(watchDay: Int) { TODO("iOS V-Band not yet implemented") }
-    actual override fun readOriginDataSingleDay(day: Int, watchDay: Int) { TODO("iOS V-Band not yet implemented") }
+    actual override fun readAllHealthData(watchDay: Int) { /* no-op: SDK disabled */ }
+    actual override fun readOriginData(watchDay: Int) { /* no-op: SDK disabled */ }
+     override fun readOriginDataSingleDay(day: Int, watchDay: Int) { /* no-op: SDK disabled */ }
 
-    // ─── Sleep ──────────────────────────────────────────────────────────────────
+    // ─── Sleep (no-op) ──────────────────────────────────────────────────────────
 
-    actual override fun readSleepData(watchDay: Int) { TODO("iOS V-Band not yet implemented") }
-    actual override fun readSleepDataSingleDay(day: Int, watchDay: Int) { TODO("iOS V-Band not yet implemented") }
+    actual override fun readSleepData(watchDay: Int) { /* no-op: SDK disabled */ }
+     override fun readSleepDataSingleDay(day: Int, watchDay: Int) { /* no-op: SDK disabled */ }
 
-    // ─── Heart Rate ─────────────────────────────────────────────────────────────
+    // ─── Heart Rate (no-op) ─────────────────────────────────────────────────────
 
-    actual override fun startDetectHeart() { TODO("iOS V-Band not yet implemented") }
-    actual override fun stopDetectHeart() { TODO("iOS V-Band not yet implemented") }
-    actual override fun readHeartWarning() { TODO("iOS V-Band not yet implemented") }
-    actual override fun settingHeartWarning(high: Int, low: Int, isOpen: Boolean) { TODO("iOS V-Band not yet implemented") }
+    actual override fun startDetectHeart() { /* no-op: SDK disabled */ }
+    actual override fun stopDetectHeart() { /* no-op: SDK disabled */ }
+    actual override fun readHeartWarning() { /* no-op: SDK disabled */ }
+    actual override fun settingHeartWarning(high: Int, low: Int, isOpen: Boolean) { /* no-op: SDK disabled */ }
 
-    // ─── Temperature ────────────────────────────────────────────────────────────
+    // ─── Temperature (no-op) ────────────────────────────────────────────────────
 
-    actual override fun startDetectTemperature() { TODO("iOS V-Band not yet implemented") }
-    actual override fun stopDetectTemperature() { TODO("iOS V-Band not yet implemented") }
-    actual override fun readTemperatureData(day: Int, watchDay: Int) { TODO("iOS V-Band not yet implemented") }
-    actual override fun readTemperatureDataSingleDay(day: Int, watchDay: Int) { TODO("iOS V-Band not yet implemented") }
+    actual override fun startDetectTemperature() { /* no-op: SDK disabled */ }
+    actual override fun stopDetectTemperature() { /* no-op: SDK disabled */ }
+    actual override fun readTemperatureData(day: Int, watchDay: Int) { /* no-op: SDK disabled */ }
+     override fun readTemperatureDataSingleDay(day: Int, watchDay: Int) { /* no-op: SDK disabled */ }
 
-    // ─── Personalization ────────────────────────────────────────────────────────
+    // ─── Personalization (no-op) ────────────────────────────────────────────────
 
-    actual override fun readCustomSetting() { TODO("iOS V-Band not yet implemented") }
-    actual override fun changeCustomSetting(setting: VBandCustomSettingData) { TODO("iOS V-Band not yet implemented") }
+    actual override fun readCustomSetting() { /* no-op: SDK disabled */ }
+    actual override fun changeCustomSetting(setting: VBandCustomSettingData) { /* no-op: SDK disabled */ }
 
-    // ─── Night Turn Wrist ───────────────────────────────────────────────────────
+    // ─── Night Turn Wrist (no-op) ───────────────────────────────────────────────
 
-    actual override fun readNightTurnWrist() { TODO("iOS V-Band not yet implemented") }
-    actual override fun settingNightTurnWrist(isOpen: Boolean, startHour: Int, startMinute: Int, endHour: Int, endMinute: Int, level: Int) { TODO("iOS V-Band not yet implemented") }
+    actual override fun readNightTurnWrist() { /* no-op: SDK disabled */ }
+    actual override fun settingNightTurnWrist(isOpen: Boolean, startHour: Int, startMinute: Int, endHour: Int, endMinute: Int, level: Int) { /* no-op: SDK disabled */ }
 
-    // ─── Screen Brightness ──────────────────────────────────────────────────────
+    // ─── Screen Brightness (no-op) ──────────────────────────────────────────────
 
-    actual override fun readScreenLight() { TODO("iOS V-Band not yet implemented") }
-    actual override fun settingScreenLight(startHour: Int, startMinute: Int, endHour: Int, endMinute: Int, level: Int, otherLevel: Int) { TODO("iOS V-Band not yet implemented") }
+    actual override fun readScreenLight() { /* no-op: SDK disabled */ }
+    actual override fun settingScreenLight(startHour: Int, startMinute: Int, endHour: Int, endMinute: Int, level: Int, otherLevel: Int) { /* no-op: SDK disabled */ }
 
-    // ─── Screen On Time ─────────────────────────────────────────────────────────
+    // ─── Screen On Time (no-op) ─────────────────────────────────────────────────
 
-    actual override fun readScreenLightTime() { TODO("iOS V-Band not yet implemented") }
-    actual override fun setScreenLightTime(seconds: Int) { TODO("iOS V-Band not yet implemented") }
+    actual override fun readScreenLightTime() { /* no-op: SDK disabled */ }
+    actual override fun setScreenLightTime(seconds: Int) { /* no-op: SDK disabled */ }
 
-    // ─── Health Reminders ───────────────────────────────────────────────────────
+    // ─── Health Reminders (no-op) ───────────────────────────────────────────────
 
-    actual override fun readHealthRemind(type: VBandHealthRemindType) { TODO("iOS V-Band not yet implemented") }
-    actual override fun settingHealthRemind(remind: VBandHealthRemind) { TODO("iOS V-Band not yet implemented") }
+    actual override fun readHealthRemind(type: VBandHealthRemindType) { /* no-op: SDK disabled */ }
+    actual override fun settingHealthRemind(remind: VBandHealthRemind) { /* no-op: SDK disabled */ }
 
-    // ─── Language ───────────────────────────────────────────────────────────────
+    // ─── Language (no-op) ───────────────────────────────────────────────────────
 
-    actual override fun settingLanguage(language: VBandLanguage) { TODO("iOS V-Band not yet implemented") }
+    actual override fun settingLanguage(language: VBandLanguage) { /* no-op: SDK disabled */ }
 
-    // ─── Sequential Sync ────────────────────────────────────────────────────────
+    // ─── Sequential Sync (no-op) ────────────────────────────────────────────────
 
-    actual override suspend fun syncAllData(watchDay: Int) { TODO("iOS V-Band not yet implemented") }
-    actual override suspend fun syncDayData(day: Int, watchDay: Int) { TODO("iOS V-Band not yet implemented") }
-    actual override fun cancelSync() { /* no-op */ }
+     override suspend fun syncAllData(watchDay: Int) { /* no-op: SDK disabled */ }
+     override suspend fun syncDayData(day: Int, watchDay: Int) { /* no-op: SDK disabled */ }
+     override fun cancelSync() { /* no-op */ }
 
     // ─── Utility ────────────────────────────────────────────────────────────────
 
     actual override fun clearLogs() { _logs.value = emptyList() }
-    actual override fun clearSyncLogs() {
+     override fun clearSyncLogs() {
         _syncLogs.value = emptyList()
         _syncState.value = VBandSyncState()
     }
 }
-

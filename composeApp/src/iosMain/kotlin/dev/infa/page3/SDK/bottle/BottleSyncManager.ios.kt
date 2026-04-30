@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 /**
  * iOS stub for BottleSyncManager.
- * TODO: Implement CoreBluetooth-based BLE communication for iOS.
+ * SDK disabled – all methods are no-ops returning defaults.
  */
 actual class BottleSyncManager : IBottleSyncManager {
 
@@ -67,36 +67,36 @@ actual class BottleSyncManager : IBottleSyncManager {
     private val _logs = MutableStateFlow<List<String>>(emptyList())
     actual override val logs: StateFlow<List<String>> = _logs
 
-    actual override fun startScan() { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun stopScan() { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun connect(device: BottleDeviceInfo) { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun disconnect() { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun requestBatteryLevel() { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun requestFirmwareVersion() { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun requestAllAlarms() { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun requestDrinkingRecordDays() { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun requestDrinkingRecordData(dayIndex: Int) { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun requestWaterIntakeTarget() { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun requestFuncSwitch() { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun requestAutoStandby() { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun requestColorLight() { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun requestDoNotDisturb() { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun requestGradientOption() { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun requestReminderLight() { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun syncTime() { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun activateLight() { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun calibrateSensor() { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun setWaterIntakeTarget(targetMl: Int) { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun updateAlarm(alarm: BottleAlarm) { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun deleteAlarm(alarmId: Int) { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun confirmAcquisition(dayIndex: Int) { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun sendTotalDailyWaterIntake(totalMl: Int) { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun setFuncSwitch(smartReminderOn: Boolean) { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun setAutoStandby(option: Int) { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun setColorLight(on: Boolean, startColor: Int, endColor: Int) { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun setDoNotDisturb(on: Boolean, startH: Int, startM: Int, endH: Int, endM: Int) { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun setGradientOption(option: Int) { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun setReminderLight(colorIndex: Int) { TODO("iOS Bottle BLE not yet implemented") }
-    actual override fun factoryReset() { TODO("iOS Bottle BLE not yet implemented") }
+    actual override fun startScan() { /* no-op: SDK disabled */ }
+    actual override fun stopScan() { /* no-op: SDK disabled */ }
+    actual override fun connect(device: BottleDeviceInfo) { /* no-op: SDK disabled */ }
+    actual override fun disconnect() { /* no-op: SDK disabled */ }
+    actual override fun requestBatteryLevel() { /* no-op: SDK disabled */ }
+    actual override fun requestFirmwareVersion() { /* no-op: SDK disabled */ }
+    actual override fun requestAllAlarms() { /* no-op: SDK disabled */ }
+    actual override fun requestDrinkingRecordDays() { /* no-op: SDK disabled */ }
+    actual override fun requestDrinkingRecordData(dayIndex: Int) { /* no-op: SDK disabled */ }
+    actual override fun requestWaterIntakeTarget() { /* no-op: SDK disabled */ }
+    actual override fun requestFuncSwitch() { /* no-op: SDK disabled */ }
+    actual override fun requestAutoStandby() { /* no-op: SDK disabled */ }
+    actual override fun requestColorLight() { /* no-op: SDK disabled */ }
+    actual override fun requestDoNotDisturb() { /* no-op: SDK disabled */ }
+    actual override fun requestGradientOption() { /* no-op: SDK disabled */ }
+    actual override fun requestReminderLight() { /* no-op: SDK disabled */ }
+    actual override fun syncTime() { /* no-op: SDK disabled */ }
+    actual override fun activateLight() { /* no-op: SDK disabled */ }
+    actual override fun calibrateSensor() { /* no-op: SDK disabled */ }
+    actual override fun setWaterIntakeTarget(targetMl: Int) { /* no-op: SDK disabled */ }
+    actual override fun updateAlarm(alarm: BottleAlarm) { /* no-op: SDK disabled */ }
+    actual override fun deleteAlarm(alarmId: Int) { /* no-op: SDK disabled */ }
+    actual override fun confirmAcquisition(dayIndex: Int) { /* no-op: SDK disabled */ }
+    actual override fun sendTotalDailyWaterIntake(totalMl: Int) { /* no-op: SDK disabled */ }
+    actual override fun setFuncSwitch(smartReminderOn: Boolean) { /* no-op: SDK disabled */ }
+    actual override fun setAutoStandby(option: Int) { /* no-op: SDK disabled */ }
+    actual override fun setColorLight(on: Boolean, startColor: Int, endColor: Int) { /* no-op: SDK disabled */ }
+    actual override fun setDoNotDisturb(on: Boolean, startH: Int, startM: Int, endH: Int, endM: Int) { /* no-op: SDK disabled */ }
+    actual override fun setGradientOption(option: Int) { /* no-op: SDK disabled */ }
+    actual override fun setReminderLight(colorIndex: Int) { /* no-op: SDK disabled */ }
+    actual override fun factoryReset() { /* no-op: SDK disabled */ }
     actual override fun clearLogs() { _logs.value = emptyList() }
 }

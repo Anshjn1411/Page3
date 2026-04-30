@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -70,6 +71,7 @@ fun ProductCard(
                     },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
+                        .zIndex(2f)
                         .padding(8.dp)
                         .background(
                             MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),

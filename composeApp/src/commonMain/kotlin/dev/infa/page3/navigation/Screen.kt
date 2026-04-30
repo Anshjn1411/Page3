@@ -25,7 +25,7 @@ import dev.infa.page3.SDK.viewModel.SyncViewModel
 import dev.infa.page3.data.model.WcCustomer
 import dev.infa.page3.data.remote.CacheManager
 import dev.infa.page3.data.remote.SessionManager
-import dev.infa.page3.presentation.api.ApiService
+import dev.infa.page3.presentation.api.*
 import dev.infa.page3.presentation.repositary.CategoryRepository
 import dev.infa.page3.presentation.repositary.ProductRepository
 import dev.infa.page3.presentation.repository.AuthRepository
@@ -75,6 +75,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.serialization.Transient
+import org.koin.mp.KoinPlatform
 
 // ============= TAB DEFINITIONS =============
 
@@ -83,11 +84,8 @@ object AuthManager {
     private val _authState = MutableStateFlow<AuthUiState>(AuthUiState.Loading)
     val authState: StateFlow<AuthUiState> = _authState
 
-    private val viewModel by lazy {
-        AuthViewModel(
-            AuthRepository(ApiService(), SessionManager())
-        )
-    }
+    private val viewModel: AuthViewModel
+        get() = KoinPlatform.getKoin().get()
 
     private val _currentUser = MutableStateFlow<WcCustomer?>(null)
     val currentUser: StateFlow<WcCustomer?> = _currentUser
@@ -623,14 +621,13 @@ object AppViewModels {
                 vBandViewModel = VBandViewModel(vBandManager)
             }
 
-            // E-commerce ViewModels
-
-
-            authViewModel = AuthViewModel(AuthRepository(apiService, sessionManager))
-            categoryViewModel = CategoryViewModel(CategoryRepository(apiService, sessionManager))
-            productViewModel = ProductViewModel(ProductRepository(apiService, sessionManager))
-            wishListViewModel = WishlistViewModel(WishlistRepository())
-            cartViewModel = CartViewModel(CartRepository())
+            // E-commerce ViewModels (Koin)
+            val koin = KoinPlatform.getKoin()
+            authViewModel = koin.get()
+            categoryViewModel = koin.get()
+            productViewModel = koin.get()
+            wishListViewModel = koin.get()
+            cartViewModel = koin.get()
 
             isInitialized = true
             println("✅ All ViewModels initialized")

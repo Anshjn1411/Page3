@@ -3,6 +3,7 @@ package dev.infa.page3.presentation.viewModel
 import dev.infa.page3.data.model.Product
 import dev.infa.page3.data.model.WcProductCreateRequest
 import dev.infa.page3.data.model.WcProductUpdateRequest
+import dev.infa.page3.network.NetworkException
 import dev.infa.page3.presentation.repositary.ProductRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -51,6 +52,19 @@ class ProductViewModel(
     // Store all loaded products for local search
     private var allLoadedProducts: List<Product> = emptyList()
 
+    // Category grid pagination (WooCommerce page/per_page)
+    private val categoryPerPage = 20
+    private var pagingCategoryId: String? = null
+    private var categoryLoadedPages: MutableList<Product> = mutableListOf()
+    private var categoryNextPage = 1
+    private var categoryHasMoreInternal = true
+
+    private val _categoryPagingLoadingMore = MutableStateFlow(false)
+    val categoryPagingLoadingMore = _categoryPagingLoadingMore.asStateFlow()
+
+    private val _categoryHasMore = MutableStateFlow(true)
+    val categoryHasMore = _categoryHasMore.asStateFlow()
+
     // ====== Load all products with caching ======
     fun loadProducts(page: Int = 1, perPage: Int = 20, categoryId: Int? = null, search: String? = null) {
         if (isProductsLoaded && cachedProductList != null && categoryId == null && search.isNullOrBlank()) {
@@ -63,7 +77,9 @@ class ProductViewModel(
             _currentPage = page
             _currentPerPage = perPage
             try {
-                val products = repository.getAllProducts(page = page, perPage = perPage, categoryId = categoryId, search = search)
+                val products = withContext(Dispatchers.Default) {
+                    repository.getAllProducts(page = page, perPage = perPage, categoryId = categoryId, search = search)
+                }
                 products.forEach { cachedProducts[it.id] = it }
 
                 // Store all products for local search
@@ -74,6 +90,8 @@ class ProductViewModel(
                     isProductsLoaded = true
                 }
                 _productsState.value = if (products.isEmpty()) ListUiState.Empty else ListUiState.Success(products)
+            } catch (e: NetworkException) {
+                _productsState.value = ListUiState.Error(e.message ?: NetworkException.DEFAULT_MESSAGE)
             } catch (e: Exception) {
                 _productsState.value = ListUiState.Error("Failed to load products: ${e.message}")
             }
@@ -90,11 +108,15 @@ class ProductViewModel(
         viewModelScope.launch {
             _productsState.value = ListUiState.Loading
             try {
-                val products = repository.getFeaturedProducts(limit)
+                val products = withContext(Dispatchers.Default) {
+                    repository.getFeaturedProducts(limit)
+                }
                 cachedFeaturedProducts = products
                 isFeaturedLoaded = true
                 allLoadedProducts = (allLoadedProducts + products).distinctBy { it.id }
                 _productsState.value = if (products.isEmpty()) ListUiState.Empty else ListUiState.Success(products)
+            } catch (e: NetworkException) {
+                _productsState.value = ListUiState.Error(e.message ?: NetworkException.DEFAULT_MESSAGE)
             } catch (e: Exception) {
                 _productsState.value = ListUiState.Error("Failed to load featured products: ${e.message}")
             }
@@ -111,11 +133,15 @@ class ProductViewModel(
         viewModelScope.launch {
             _productsState.value = ListUiState.Loading
             try {
-                val products = repository.getProductsOnSale(limit)
+                val products = withContext(Dispatchers.Default) {
+                    repository.getProductsOnSale(limit)
+                }
                 cachedSaleProducts = products
                 isSaleLoaded = true
                 allLoadedProducts = (allLoadedProducts + products).distinctBy { it.id }
                 _productsState.value = if (products.isEmpty()) ListUiState.Empty else ListUiState.Success(products)
+            } catch (e: NetworkException) {
+                _productsState.value = ListUiState.Error(e.message ?: NetworkException.DEFAULT_MESSAGE)
             } catch (e: Exception) {
                 _productsState.value = ListUiState.Error("Failed to load sale products: ${e.message}")
             }
@@ -128,10 +154,14 @@ class ProductViewModel(
             _selectedProductState.value = SingleUiState.Loading
             try {
                 val cached = productId.toIntOrNull()?.let { cachedProducts[it] }
-                val product = cached ?: repository.getProductById(productId)
+                val product = cached ?: withContext(Dispatchers.Default) {
+                    repository.getProductById(productId)
+                }
                 product?.let { cachedProducts[it.id] = it }
                 _selectedProductState.value = if (product != null) SingleUiState.Success(product)
                 else SingleUiState.Error("Product not found")
+            } catch (e: NetworkException) {
+                _selectedProductState.value = SingleUiState.Error(e.message ?: NetworkException.DEFAULT_MESSAGE)
             } catch (e: Exception) {
                 _selectedProductState.value = SingleUiState.Error("Failed to load product: ${e.message}")
             }
@@ -143,11 +173,15 @@ class ProductViewModel(
         viewModelScope.launch {
             _operationState.value = OperationUiState.Loading
             try {
-                val result = repository.createProduct(productRequest)
+                val result = withContext(Dispatchers.Default) {
+                    repository.createProduct(productRequest)
+                }
                 _operationState.value = if (result != null) {
                     loadProducts(_currentPage, _currentPerPage)
                     OperationUiState.Success
                 } else OperationUiState.Error("Failed to create product")
+            } catch (e: NetworkException) {
+                _operationState.value = OperationUiState.Error(e.message ?: NetworkException.DEFAULT_MESSAGE)
             } catch (e: Exception) {
                 _operationState.value = OperationUiState.Error("Error creating product: ${e.message}")
             }
@@ -158,11 +192,15 @@ class ProductViewModel(
         viewModelScope.launch {
             _operationState.value = OperationUiState.Loading
             try {
-                val result = repository.updateProduct(productId, productRequest)
+                val result = withContext(Dispatchers.Default) {
+                    repository.updateProduct(productId, productRequest)
+                }
                 _operationState.value = if (result != null) {
                     loadProducts(_currentPage, _currentPerPage)
                     OperationUiState.Success
                 } else OperationUiState.Error("Failed to update product")
+            } catch (e: NetworkException) {
+                _operationState.value = OperationUiState.Error(e.message ?: NetworkException.DEFAULT_MESSAGE)
             } catch (e: Exception) {
                 _operationState.value = OperationUiState.Error("Error updating product: ${e.message}")
             }
@@ -173,11 +211,15 @@ class ProductViewModel(
         viewModelScope.launch {
             _operationState.value = OperationUiState.Loading
             try {
-                val result = repository.deleteProduct(productId)
+                val result = withContext(Dispatchers.Default) {
+                    repository.deleteProduct(productId)
+                }
                 _operationState.value = if (result) {
                     loadProducts(_currentPage, _currentPerPage)
                     OperationUiState.Success
                 } else OperationUiState.Error("Failed to delete product")
+            } catch (e: NetworkException) {
+                _operationState.value = OperationUiState.Error(e.message ?: NetworkException.DEFAULT_MESSAGE)
             } catch (e: Exception) {
                 _operationState.value = OperationUiState.Error("Error deleting product: ${e.message}")
             }
@@ -420,17 +462,70 @@ class ProductViewModel(
     }
 
     fun loadProductsByCategory(categoryId: String) {
+        if (pagingCategoryId == categoryId && categoryLoadedPages.isNotEmpty()) {
+            _productsState.value = ListUiState.Success(categoryLoadedPages.toList())
+            return
+        }
+        pagingCategoryId = categoryId
+        categoryLoadedPages = mutableListOf()
+        categoryNextPage = 1
+        categoryHasMoreInternal = true
+        _categoryHasMore.value = true
+
         viewModelScope.launch {
             _productsState.value = ListUiState.Loading
             try {
-                val products = repository.getProductsByCategory(categoryId)
+                val products = withContext(Dispatchers.Default) {
+                    repository.getProductsByCategory(categoryId, page = 1, perPage = categoryPerPage)
+                }
+                categoryLoadedPages = products.toMutableList()
+                categoryHasMoreInternal = products.size >= categoryPerPage
+                _categoryHasMore.value = categoryHasMoreInternal
+                categoryNextPage = 2
+                products.forEach { cachedProducts[it.id] = it }
                 allLoadedProducts = (allLoadedProducts + products).distinctBy { it.id }
                 _productsState.value = when {
                     products.isEmpty() -> ListUiState.Empty
-                    else -> ListUiState.Success(products)
+                    else -> ListUiState.Success(categoryLoadedPages.toList())
                 }
+            } catch (e: NetworkException) {
+                _productsState.value = ListUiState.Error(e.message ?: NetworkException.DEFAULT_MESSAGE)
             } catch (e: Exception) {
                 _productsState.value = ListUiState.Error("Failed to load products: ${e.message}")
+            }
+        }
+    }
+
+    fun loadNextPageForCategory() {
+        val catId = pagingCategoryId ?: return
+        if (!categoryHasMoreInternal || _categoryPagingLoadingMore.value) return
+        if (_productsState.value !is ListUiState.Success) return
+
+        viewModelScope.launch {
+            _categoryPagingLoadingMore.value = true
+            try {
+                val page = withContext(Dispatchers.Default) {
+                    repository.getProductsByCategory(catId, page = categoryNextPage, perPage = categoryPerPage)
+                }
+                if (page.isEmpty()) {
+                    categoryHasMoreInternal = false
+                    _categoryHasMore.value = false
+                } else {
+                    val newItems = page.filter { p -> categoryLoadedPages.none { it.id == p.id } }
+                    categoryLoadedPages.addAll(newItems)
+                    categoryNextPage++
+                    categoryHasMoreInternal = page.size >= categoryPerPage
+                    _categoryHasMore.value = categoryHasMoreInternal
+                    _productsState.value = ListUiState.Success(categoryLoadedPages.toList())
+                    page.forEach { cachedProducts[it.id] = it }
+                    allLoadedProducts = (allLoadedProducts + page).distinctBy { it.id }
+                }
+            } catch (e: NetworkException) {
+                _productsState.value = ListUiState.Error(e.message ?: NetworkException.DEFAULT_MESSAGE)
+            } catch (_: Exception) {
+                // keep current list on page errors
+            } finally {
+                _categoryPagingLoadingMore.value = false
             }
         }
     }
@@ -439,12 +534,16 @@ class ProductViewModel(
         viewModelScope.launch {
             _productsState.value = ListUiState.Loading
             try {
-                val products = repository.getProductsBySubCategory(subCategoryId)
+                val products = withContext(Dispatchers.Default) {
+                    repository.getProductsBySubCategory(subCategoryId, page = 1, perPage = categoryPerPage)
+                }
                 allLoadedProducts = (allLoadedProducts + products).distinctBy { it.id }
                 _productsState.value = when {
                     products.isEmpty() -> ListUiState.Empty
                     else -> ListUiState.Success(products)
                 }
+            } catch (e: NetworkException) {
+                _productsState.value = ListUiState.Error(e.message ?: NetworkException.DEFAULT_MESSAGE)
             } catch (e: Exception) {
                 _productsState.value = ListUiState.Error("Failed to load products: ${e.message}")
             }

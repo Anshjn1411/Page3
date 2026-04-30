@@ -43,6 +43,7 @@ import page3.composeapp.generated.resources.splash
 @Composable
 fun CategoryCard(
     category: WcCategory,
+    videoUrl: String? = null,
     onClick: () -> Unit = {}
 ) {
     Box(
@@ -53,7 +54,10 @@ fun CategoryCard(
             .clip(RoundedCornerShape(4.dp))
             .clickable { onClick() }
     ) {
-        LoopingVideoBackground(modifier = Modifier.fillMaxSize())
+        LoopingVideoBackground(
+            modifier = Modifier.fillMaxSize(),
+            videoUrl = videoUrl   // ← passed through
+        )
 
         // Category Name + Description
         Column(
@@ -111,6 +115,8 @@ fun CategoryCard(
     }
 }
 
-
 @Composable
-expect fun LoopingVideoBackground(modifier: Modifier = Modifier)
+expect fun LoopingVideoBackground(
+    modifier: Modifier = Modifier,
+    videoUrl: String? = null   // null = use the default hardcoded asset
+)

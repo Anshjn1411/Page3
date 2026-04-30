@@ -12,9 +12,5 @@
 		<string>audio</string>
 		<string>location</string>
 	</array>
-	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Page3 needs Bluetooth to connect to your health ring and sync health data</string>
-	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>Page3 needs Bluetooth to connect to your health ring and sync health data</string>
 </dict>
 </plist>

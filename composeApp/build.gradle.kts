@@ -1,13 +1,16 @@
 import org.gradle.kotlin.dsl.implementation
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFramework
+import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
+
     kotlin("plugin.serialization") version "1.9.0"
+
     alias(libs.plugins.googleGmsGoogleServices)
 }
 
@@ -17,37 +20,39 @@ kotlin {
             jvmTarget.set(JvmTarget.JVM_11)
         }
     }
+
     val xcframework = XCFramework("ComposeApp")
 
-    val qcBandSdkFrameworkDir = rootProject.file("QCBandSDKDemo 2/QCBandSDK.framework").parentFile.absolutePath
+    // ✅ FIX: Add iosSimulatorArm64
+    val iosTargets = listOf(
+        iosX64(),
+        iosArm64(),
+    )
 
-    listOf(
-        iosX64(),      // Intel simulator
-        iosArm64(),    // Real devices
-        iosSimulatorArm64()  // Apple Silicon simulator - ADD THIS
-    ).forEach { iosTarget ->
+    iosTargets.forEach { iosTarget ->
         iosTarget.binaries.framework {
             baseName = "ComposeApp"
             isStatic = true
 
-            // Add to XCFramework
             xcframework.add(this)
             binaryOption("bundleId", "dev.infa.page3")
 
-            // Export dependencies
             export(libs.androidx.lifecycle.viewmodelCompose)
             export(libs.androidx.lifecycle.runtimeCompose)
 
-            // Link QCBandSDK framework
-            linkerOpts("-F$qcBandSdkFrameworkDir", "-framework", "QCBandSDK", "-ObjC")
+            linkerOpts(
+                "-framework", "SystemConfiguration",
+                "-ObjC"
+            )
         }
+    }
 
-        // cinterop for QCBandSDK Objective-C framework
-        iosTarget.compilations.getByName("main") {
-            cinterops.create("QCBandSDK") {
-                defFile = project.file("src/nativeInterop/cinterop/QCBandSDK.def")
-                compilerOpts("-F$qcBandSdkFrameworkDir")
-            }
+    // ✅ FIX: Compiler flag for Xcode integration
+    targets.withType<KotlinNativeTarget>().configureEach {
+        binaries.all {
+            freeCompilerArgs += listOf(
+                "-Xbinary=ios_use_xcode_message_style=true"
+            )
         }
     }
 
@@ -60,32 +65,42 @@ kotlin {
                 implementation(compose.ui)
                 implementation(compose.components.resources)
                 implementation(compose.components.uiToolingPreview)
+
                 api(libs.androidx.lifecycle.viewmodelCompose)
                 api(libs.androidx.lifecycle.runtimeCompose)
+
                 implementation(libs.compose.material.icons.extended)
                 implementation("io.github.qdsfdhvh:image-loader:1.10.0")
                 implementation("com.russhwolf:multiplatform-settings-no-arg:1.3.0")
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+
                 implementation("io.ktor:ktor-client-core:3.3.3")
                 implementation("io.ktor:ktor-client-content-negotiation:3.3.3")
                 implementation("io.ktor:ktor-serialization-kotlinx-json:3.3.3")
                 implementation("io.ktor:ktor-client-logging:3.3.3")
+
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+
                 implementation("cafe.adriel.voyager:voyager-navigator:1.0.1")
                 implementation("cafe.adriel.voyager:voyager-screenmodel:1.0.1")
                 implementation("cafe.adriel.voyager:voyager-koin:1.0.1")
                 implementation("cafe.adriel.voyager:voyager-tab-navigator:1.0.1")
-            }
-        }
 
-        val commonTest by getting {
-            dependencies {
-                implementation("org.jetbrains.kotlin:kotlin-test:2.2.20")
+                implementation("io.insert-koin:koin-core:3.5.6")
+                implementation("io.insert-koin:koin-compose:1.1.5")
             }
         }
 
         val androidMain by getting {
             dependencies {
+                implementation("io.coil-kt:coil-compose:2.7.0")   // rememberAsyncImagePainter, ImageLoader
+                implementation("io.coil-kt:coil-gif:2.7.0")
+                implementation("io.insert-koin:koin-android:3.5.6")
+                implementation(compose.preview)
+                implementation(libs.androidx.activity.compose)
+
+                implementation("io.ktor:ktor-client-okhttp:3.3.3")
+
                 implementation(compose.preview)
                 implementation(libs.androidx.activity.compose)
                 implementation("androidx.fragment:fragment-ktx:1.6.0")
@@ -120,15 +135,15 @@ kotlin {
             }
         }
 
+        // ✅ FIX: Proper iOS hierarchy
         val iosX64Main by getting
         val iosArm64Main by getting
-        val iosSimulatorArm64Main by getting  // ADD THIS
 
         val iosMain by creating {
             dependsOn(commonMain)
+
             iosX64Main.dependsOn(this)
             iosArm64Main.dependsOn(this)
-            iosSimulatorArm64Main.dependsOn(this)  // ADD THIS
 
             dependencies {
                 implementation("io.ktor:ktor-client-darwin:3.3.3")
@@ -145,8 +160,8 @@ android {
         applicationId = "dev.infa.page3"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 22
-        versionName = "2.2"
+        versionCode = 24
+        versionName = "2.4"
 
         // PhonePe SDK credentials from gradle.properties
         buildConfigField("String", "PHONEPE_CLIENT_ID", "\"${project.findProperty("PHONEPE_CLIENT_ID") ?: ""}\"")
@@ -154,7 +169,6 @@ android {
         buildConfigField("String", "PHONEPE_CLIENT_VERSION", "\"${project.findProperty("PHONEPE_CLIENT_VERSION") ?: "1"}\"")
         buildConfigField("String", "PHONEPE_MERCHANT_ID", "\"${project.findProperty("PHONEPE_MERCHANT_ID") ?: ""}\"")
     }
-
     packaging {
         jniLibs {
             useLegacyPackaging = false
@@ -163,7 +177,6 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
-
 
     buildTypes {
         getByName("release") {
@@ -194,4 +207,10 @@ android {
 dependencies {
     implementation(libs.firebase.auth)
     debugImplementation(compose.uiTooling)
+}
+
+compose {
+    resources {
+        publicResClass = true
+    }
 }

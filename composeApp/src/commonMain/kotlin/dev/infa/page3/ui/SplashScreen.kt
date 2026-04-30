@@ -9,9 +9,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.Navigator
+import dev.infa.page3.navigation.AppViewModels
 import dev.infa.page3.navigation.AuthManager
 import dev.infa.page3.navigation.HomeMainScreen
-import dev.infa.page3.presentation.repository.UserRepository
+import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.painterResource
 import page3.composeapp.generated.resources.Res
 import page3.composeapp.generated.resources.splash
@@ -19,12 +20,11 @@ import page3.composeapp.generated.resources.splash
 @Composable
 fun SplashScreen(navigator : Navigator) {
     LaunchedEffect(Unit) {
+        while (!AppViewModels.isInitialized) {
+            delay(32)
+        }
         AuthManager.init()
-    }
-    LaunchedEffect(Unit){
-            navigator.push(
-                HomeMainScreen()
-            )
+        navigator.push(HomeMainScreen())
     }
 
     Surface(

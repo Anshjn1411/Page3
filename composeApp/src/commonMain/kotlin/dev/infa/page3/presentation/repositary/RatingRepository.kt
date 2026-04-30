@@ -3,7 +3,7 @@ package dev.infa.page3.presentation.repositary
 import dev.infa.page3.data.model.WcReview
 import dev.infa.page3.data.model.WcReviewCreateRequest
 import dev.infa.page3.data.remote.SessionManager
-import dev.infa.page3.presentation.api.ApiService
+import dev.infa.page3.presentation.api.*
 
 
 class RatingRepository(

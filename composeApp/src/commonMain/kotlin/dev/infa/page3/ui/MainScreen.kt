@@ -58,6 +58,7 @@ import cafe.adriel.voyager.navigator.Navigator
 import dev.infa.page3.SDK.bottle.navigation.BottleDashboardScreenNav
 import dev.infa.page3.SDK.`V-Band`.navigation.VBandDashboardScreenNav
 import dev.infa.page3.SDK.ui.navigation.HomeScreenSDK
+import dev.infa.page3.data.model.WcCategory
 import dev.infa.page3.navigation.*
 import dev.infa.page3.presentation.uiSatateClaases.ListUiState
 import dev.infa.page3.presentation.viewModel.CategoryViewModel
@@ -77,7 +78,10 @@ import page3.composeapp.generated.resources.ring
 import dev.infa.page3.ui.components.LocalAppNavVisibility
 import dev.infa.page3.ui.components.AppFloatingNavBottomPadding
 import dev.infa.page3.ui.components.ProvideAppBottomNav
-import dev.infa.page3.ui.productscreen.components.ProductCarouselScreen
+import dev.infa.page3.ui.productscreen.components.AppStyleProductCarousel
+import dev.infa.page3.ui.productscreen.components.CarouselProduct
+import dev.infa.page3.ui.productscreen.components.SdkRoute
+import dev.infa.page3.ui.productscreen.components.defaultConnectProducts
 import page3.composeapp.generated.resources.vband
 
 
@@ -103,371 +107,58 @@ private data class DeviceSlide(
     val accentColor: Color,
     val onClick: () -> Unit
 )
+// ─── Hardcoded extra categories ───────────────────────────────────────────────
+
+data class HardcodedCategoryExtra(
+    val category: WcCategory,
+    val videoUrl: String
+)
+
+private val hardcodedCategories = listOf(
+    HardcodedCategoryExtra(
+        category = WcCategory(id = -1, name = "Luggage", slug = "gadgets", image = null, count = 0),
+        videoUrl = "https://res.cloudinary.com/da0kwcojw/video/upload/v1776665100/Page_3_Suitcase_V2_2_cwbns1.mp4"
+    ),
+    HardcodedCategoryExtra(
+        category = WcCategory(id = -2, name = "Essentials", slug = "essentials", image = null, count = 0),
+        videoUrl = "hhttps://res.cloudinary.com/da0kwcojw/video/upload/v1776665101/Page_3_Bottle_1_wcjuk1.mp4"
+    )
+)
 
 // ─── Main composable ─────────────────────────────────────────────────────────────
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ConnectToPage3Section(
-    onRingClick: () -> Unit,
+    onRingClick:   () -> Unit,
     onBottleClick: () -> Unit,
-    onVBandClick: () -> Unit,
-    modifier: Modifier = Modifier
+    onVBandClick:  () -> Unit,
+    modifier: Modifier = Modifier,
+    products: List<CarouselProduct> = defaultConnectProducts,
+    title: String = "My Devices"
 ) {
-    val slides = remember(onRingClick, onBottleClick, onVBandClick) {
-        listOf(
-            DeviceSlide(
-                imageRes = Res.drawable.ring,
-                title = "Smart Ring",
-                subtitle = "Health & Fitness Tracker",
-                tag = "RING",
-                gradStart = RingGrad1,
-                gradEnd = RingGrad2,
-                accentColor = Color(0xFF9D97FF),
-                onClick = onRingClick
-            ),
-            DeviceSlide(
-                imageRes = Res.drawable.bottel,
-                title = "Smart Bottle",
-                subtitle = "Hydration & Wellness",
-                tag = "BOTTLE",
-                gradStart = BottleGrad1,
-                gradEnd = BottleGrad2,
-                accentColor = Color(0xFF81D4FA),
-                onClick = onBottleClick
-            ),
-            DeviceSlide(
-                imageRes = Res.drawable.vband,   // reuse ring as placeholder; shows watch emoji in the UI
-                title = "V-Band",
-                subtitle = "Smart Watch & Fitness",
-                tag = "V-BAND",
-                gradStart = Color(0xFF26A69A),
-                gradEnd = Color(0xFF00695C),
-                accentColor = Color(0xFF80CBC4),
-                onClick = onVBandClick
-            )
+    // Map SdkRoute → the correct navigator callback
+    val sdkHandlers: Map<SdkRoute, () -> Unit> = remember(onRingClick, onBottleClick, onVBandClick) {
+        mapOf(
+            SdkRoute.Ring   to onRingClick,
+            SdkRoute.Bottle to onBottleClick,
+            SdkRoute.VBand  to onVBandClick
         )
     }
 
-    val pagerState = rememberPagerState(initialPage = 0) { slides.size }
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Section title
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text       = "My Devices",
-                fontSize   = 22.sp,
-                fontWeight = FontWeight.Black,
-                color      = Color.White,
-                letterSpacing = 0.3.sp
-            )
-            // Page indicator pills
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                slides.forEachIndexed { index, _ ->
-                    val isSelected = pagerState.currentPage == index
-                    val width by animateDpAsState(
-                        targetValue   = if (isSelected) 20.dp else 6.dp,
-                        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
-                        label         = "pill_width"
-                    )
-                    val color by animateColorAsState(
-                        targetValue   = if (isSelected) slides[index].accentColor else Color.White.copy(alpha = 0.25f),
-                        animationSpec = tween(250),
-                        label         = "pill_color"
-                    )
-                    Box(
-                        modifier = Modifier
-                            .width(width)
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(color)
-                    )
-                }
+    // Reuse the exact same carousel UI; just swap the click behaviour
+    AppStyleProductCarousel(
+        modifier  = modifier,
+        products  = products,
+        title     = title,
+        onItemClick = { product, index ->
+            val route = product.sdkRoute
+            if (route != null) {
+                // SDK route defined → open the matching SDK screen
+                sdkHandlers[route]?.invoke()
             }
+            // sdkRoute == null would fall through here; safe to ignore for connect products
         }
-
-        // Horizontal pager
-        HorizontalPager(
-            state    = pagerState,
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 24.dp),
-            pageSpacing    = 16.dp
-        ) { page ->
-            val slide      = slides[page]
-            val pageOffset = (pagerState.currentPage - page + pagerState.currentPageOffsetFraction).absoluteValue
-            val scale      = lerp(start = 0.92f, stop = 1f, fraction = 1f - pageOffset.coerceIn(0f, 1f))
-            val alpha      = lerp(start = 0.55f, stop = 1f, fraction = 1f - pageOffset.coerceIn(0f, 1f))
-
-            DeviceCarouselCard(
-                slide = slide,
-                modifier = Modifier
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        this.alpha = alpha
-                    }
-            )
-        }
-    }
-}
-
-// ─── Device carousel card ─────────────────────────────────────────────────────────
-
-@Composable
-private fun DeviceCarouselCard(
-    slide: DeviceSlide,
-    modifier: Modifier = Modifier
-) {
-    // Pulsing glow animation
-    val infiniteTransition = rememberInfiniteTransition(label = "glow")
-    val glowAlpha by infiniteTransition.animateFloat(
-        initialValue  = 0.25f,
-        targetValue   = 0.55f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "glow_alpha"
     )
-    val imageScale by infiniteTransition.animateFloat(
-        initialValue  = 1f,
-        targetValue   = 1.03f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "img_scale"
-    )
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(28.dp))
-            .background(
-                Brush.linearGradient(
-                    listOf(
-                        slide.gradStart.copy(alpha = 0.18f),
-                        BgCard2,
-                        BgCard
-                    )
-                )
-            )
-    ) {
-        // Top glow blob
-        Box(
-            modifier = Modifier
-                .size(200.dp)
-                .align(Alignment.TopCenter)
-                .offset(y = (-40).dp)
-                .background(
-                    Brush.radialGradient(
-                        listOf(slide.gradStart.copy(alpha = glowAlpha), Color.Transparent)
-                    )
-                )
-        )
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 28.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-
-            // Device tag pill
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(slide.gradStart.copy(alpha = 0.18f))
-                    .padding(horizontal = 14.dp, vertical = 5.dp)
-            ) {
-                Text(
-                    text       = slide.tag,
-                    color      = slide.accentColor,
-                    fontSize   = 10.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 2.sp
-                )
-            }
-
-            Spacer(Modifier.height(20.dp))
-
-            // Device image
-            Box(
-                modifier = Modifier
-                    .size(180.dp)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.radialGradient(
-                            listOf(
-                                slide.gradStart.copy(alpha = 0.12f),
-                                Color.Transparent
-                            )
-                        )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Image(
-                    painter            = painterResource(
-                        resource = slide.imageRes
-                    ),
-                    contentDescription = slide.title,
-                    contentScale       = ContentScale.Fit,
-                    modifier           = Modifier
-                        .size(140.dp)
-                        .scale(imageScale)
-                )
-            }
-
-            Spacer(Modifier.height(20.dp))
-
-            // Title
-            Text(
-                text       = slide.title,
-                color      = Color.White,
-                fontSize   = 22.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 0.3.sp,
-                textAlign  = TextAlign.Center
-            )
-
-            Spacer(Modifier.height(4.dp))
-
-            // Subtitle
-            Text(
-                text      = slide.subtitle,
-                color     = Color.White.copy(alpha = 0.45f),
-                fontSize  = 13.sp,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(Modifier.height(24.dp))
-
-            // Connect button
-            Button(
-                onClick = slide.onClick,
-                shape   = RoundedCornerShape(22.dp),
-                colors  = ButtonDefaults.buttonColors(
-                    containerColor = Color.Transparent,
-                    contentColor   = Color.White
-                ),
-                contentPadding = PaddingValues(0.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.horizontalGradient(listOf(slide.gradStart, slide.gradEnd)),
-                            shape = RoundedCornerShape(22.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        verticalAlignment     = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text       = "Start Connect",
-                            color      = Color.White,
-                            fontSize   = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.3.sp
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text("→", color = Color.White.copy(alpha = 0.8f), fontSize = 16.sp)
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // Subtle hint text
-            Text(
-                text      = "Swipe to see other devices",
-                color     = Color.White.copy(alpha = 0.22f),
-                fontSize  = 11.sp,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-}
-
-// ─── lerp helper ─────────────────────────────────────────────────────────────────
-
-private fun lerp(start: Float, stop: Float, fraction: Float): Float =
-    start + fraction * (stop - start)
-
-@Composable
-private fun DeviceCard(
-    emoji: String,
-    title: String,
-    subtitle: String,
-    gradientColors: List<Color>,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .width(160.dp)
-            .height(180.dp)
-            .clickable { onClick() },
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.linearGradient(gradientColors)
-                )
-                .padding(20.dp)
-        ) {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                // Emoji icon in a frosted circle
-                Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.2f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(emoji, fontSize = 26.sp)
-                }
-
-                Column {
-                    Text(
-                        text = title,
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = subtitle,
-                        color = Color.White.copy(alpha = 0.75f),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Normal
-                    )
-                }
-            }
-        }
-    }
 }
 
 
@@ -543,7 +234,8 @@ fun MainScreen(
                         when (categoriesState) {
                             is ListUiState.Loading -> LoadingScreen(modifier = Modifier.fillMaxSize())
                             is ListUiState.Success -> {
-                                val categories = (categoriesState as ListUiState.Success).data
+                                val fetchedCategories = (categoriesState as ListUiState.Success).data
+                                val allCategories = hardcodedCategories + fetchedCategories
                                 LazyColumn(
                                     state = listState,
                                     contentPadding = PaddingValues(
@@ -553,38 +245,60 @@ fun MainScreen(
                                     verticalArrangement = Arrangement.spacedBy(8.dp),
                                     modifier = Modifier.fillMaxSize()
                                 ) {
-                                    items(categories) { category ->
+                                    // Hardcoded categories with custom videos
+                                    items(hardcodedCategories) { extra ->
+                                        CategoryCard(
+                                            category = extra.category,
+                                            videoUrl = extra.videoUrl,
+                                            onClick = {
+                                                when (extra.category.slug) {
+                                                    "gadgets"    -> {  navigator.push(CategoryScreenNav(
+                                                        "12",
+                                                        "Luggage"
+                                                    ))  }
+                                                    "essentials" -> {  navigator.push(CategoryScreenNav(
+                                                        "13",
+                                                        "essentials"
+                                                    )) }
+                                                }
+                                            }
+                                        )
+                                    }
+
+                                    // Fetched categories — videoUrl stays null → default video plays
+                                    items(fetchedCategories) { category ->
                                         CategoryCard(
                                             category = category,
                                             onClick = {
                                                 navigator.push(
                                                     CategoryScreenNav(
                                                         category.id.toString(),
-                                                        category.name,
-
+                                                        category.name
                                                     )
                                                 )
                                             }
                                         )
                                     }
-
                                     item {
                                         Spacer(modifier = Modifier.height(8.dp))
                                         ConnectToPage3Section(
-                                            onRingClick = {
-                                                navigator.push(HomeScreenSDK())
-                                            },
-                                            onBottleClick = {
-                                                navigator.push(BottleDashboardScreenNav())
-                                            },
-                                            onVBandClick = {
-                                                navigator.push(VBandDashboardScreenNav())
-                                            }
+                                            onRingClick   = { navigator.push(HomeScreenSDK()) },
+                                            onBottleClick = { navigator.push(BottleDashboardScreenNav()) },
+                                            onVBandClick  = { navigator.push(VBandDashboardScreenNav()) }
                                         )
                                         Spacer(modifier = Modifier.height(16.dp))
                                     }
-                                    item{
-                                        ProductCarouselScreen()
+                                    item {
+                                        AppStyleProductCarousel(
+                                            onItemClick = { product, _ ->
+                                                navigator.push(
+                                                    ProductWebScreen(
+                                                        url = product.websiteUrl,
+                                                        title = product.label
+                                                    )
+                                                )
+                                            }
+                                        )
                                     }
 
 
@@ -595,7 +309,7 @@ fun MainScreen(
                                 }
                             }
                             is ListUiState.Error -> ErrorScreen((categoriesState as ListUiState.Error).message)
-                            is ListUiState.Empty -> EmptyScreen("No categories found")
+                            is ListUiState.Empty -> ProductsEmptyState(message = EmptyStateMessages.CATEGORIES_SOON)
                             ListUiState.Idle -> {}
                         }
                     }
@@ -621,6 +335,38 @@ fun MainScreen(
 
 
 @Composable
+private fun SidebarCategoryCard(
+    name: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0xFFF5F6FF),
+        border = BorderStroke(1.dp, Color(0xFFE0E4FF)),
+        shadowElevation = 1.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = name,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF1A1A1A),
+                maxLines = 2
+            )
+        }
+    }
+}
+
+@Composable
 fun AppSideBar(
     navigator: Navigator,
     wishlistViewModel: WishlistViewModel,
@@ -629,6 +375,8 @@ fun AppSideBar(
     authViewModel: AuthViewModel,
     categoryViewModel: CategoryViewModel
 ) {
+    val categoriesState by categoryViewModel.categoriesState.collectAsState()
+
     ModalDrawerSheet(
         modifier = Modifier
             .fillMaxHeight()
@@ -655,28 +403,68 @@ fun AppSideBar(
                 )
             }
 
-            // 🔹 Main Categories with Modern Button Design
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                ModernButton(
-                    label = "Women's",
-                    onClick = { navigator.push(CategoryScreenNav("71", "Women")) }
-                )
-                ModernButton(
-                    label = "Men's",
-                    onClick = { navigator.push(CategoryScreenNav("72", "Men")) }
-                )
-                ModernButton(
-                    label = "Gadgets",
-                    onClick = { navigator.push(CategoryScreenNav("92", "Gadgets")) }
-                )
+            Text(
+                text = "Shop by category",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF1A1A1A),
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            when (categoriesState) {
+                is ListUiState.Loading -> {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(120.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = Color(0xFF6C63FF))
+                    }
+                }
+                is ListUiState.Success -> {
+                    val categories = (categoriesState as ListUiState.Success).data
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(categories, key = { it.id }) { category ->
+                            SidebarCategoryCard(
+                                name = category.name,
+                                onClick = {
+                                    navigator.push(
+                                        CategoryScreenNav(
+                                            category.id.toString(),
+                                            category.name
+                                        )
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
+                is ListUiState.Error -> {
+                    Text(
+                        text = (categoriesState as ListUiState.Error).message,
+                        color = Color(0xFFB00020),
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+                is ListUiState.Empty -> {
+                    Text(
+                        text = EmptyStateMessages.CATEGORIES_SOON,
+                        color = Color.Gray,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+                ListUiState.Idle -> Unit
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // 🔹 Wishlist Button
             ModernButton(

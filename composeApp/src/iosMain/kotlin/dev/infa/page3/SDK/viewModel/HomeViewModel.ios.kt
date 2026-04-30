@@ -4,13 +4,17 @@ import dev.infa.page3.SDK.data.DeviceCapabilities
 import dev.infa.page3.SDK.data.ExerciseData
 import dev.infa.page3.SDK.data.ExerciseSummary
 
+/**
+ * iOS stub for HomeManager.
+ * SDK disabled – all methods return safe defaults.
+ */
 actual class HomeManager {
     actual suspend fun getBatteryLevel(): Int? {
-        TODO("Not yet implemented")
+        return null
     }
 
     actual suspend fun fetchDeviceCapabilities(): DeviceCapabilities? {
-        TODO("Not yet implemented")
+        return null
     }
 
     actual suspend fun setSportsGoals(
@@ -20,7 +24,7 @@ actual class HomeManager {
         sportMinuteGoal: Int,
         sleepMinuteGoal: Int
     ): Boolean {
-        TODO("Not yet implemented")
+        return false
     }
 
     actual fun startExercise(
@@ -29,6 +33,7 @@ actual class HomeManager {
         onEnd: (ExerciseSummary) -> Unit,
         onError: (String) -> Unit
     ) {
+        onError("SDK disabled on iOS")
     }
 
     actual fun pauseExercise() {
@@ -41,11 +46,11 @@ actual class HomeManager {
     }
 
     actual fun isExercising(): Boolean {
-        TODO("Not yet implemented")
+        return false
     }
 
     actual fun isPaused(): Boolean {
-        TODO("Not yet implemented")
+        return false
     }
 
     actual fun cleanup() {

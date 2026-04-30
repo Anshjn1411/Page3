@@ -1,314 +1,388 @@
 package dev.infa.page3.ui.productscreen.components
 
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.util.VelocityTracker
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.seiko.imageloader.rememberImagePainter
-import org.jetbrains.compose.ui.tooling.preview.Preview
-import kotlin.math.*
+import androidx.compose.ui.zIndex
+import androidx.compose.foundation.layout.Arrangement
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.pow
+import kotlin.math.round
+import kotlin.math.sin
 
-// ─────────────────────────────────────────────
-//  Data model
-// ─────────────────────────────────────────────
+// ─── Extended CarouselProduct with optional SDK route ────────────────────────
 
 data class CarouselProduct(
+    val id: Int,
     val imageUrl: String,
-    val label: String
+    val gifUrl: String,
+    val videoUrl: String,
+    val websiteUrl: String,
+    val label: String,
+    val sdkRoute: SdkRoute? = null
 )
 
-// ─────────────────────────────────────────────
-//  Main composable
-// ─────────────────────────────────────────────
+sealed class SdkRoute {
+    object Ring   : SdkRoute()
+    object Bottle : SdkRoute()
+    object VBand  : SdkRoute()
+}
 
-/**
- * A 3-D rotating product carousel.
- *
- * Each cell is placed on a virtual ring using only translationX / translationY
- * (no translationZ — not available in graphicsLayer). The 3-D depth illusion
- * comes from:
- *  • translationX  — horizontal position on the ring  (cos curve)
- *  • translationY  — vertical lift for back cells      (cos curve)
- *  • scale         — larger at front, smaller at back
- *  • alpha         — opaque at front, faded at back
- *  • blur          — sharp at front, blurred at back
- *  • rotationY     — card faces the viewer at every slot
- *  • cameraDistance — perspective foreshortening
- *
- * @param products       List of [CarouselProduct] items to display.
- * @param modifier       Standard Compose modifier.
- * @param itemCount      How many cells to show (3..products.size).
- * @param carouselWidth  Width of the carousel container.
- * @param carouselHeight Height of the carousel container.
- * @param onItemClick    Callback when a cell is tapped — (product, index).
- */
+// ─── Default products for AppStyleProductCarousel ────────────────────────────
+
+val defaultCarouselProducts = listOf(
+    CarouselProduct(
+        id = 1,
+        label = "Suitcase",
+        imageUrl   = "https://static.vecteezy.com/system/resources/previews/047/241/779/non_2x/3d-suitcase-isolated-on-transparent-background-free-png.png",
+        gifUrl     = "https://motion.inventiko.com/paze3/suitcase/assets/suitcase.gif",
+        videoUrl   = "https://motion.inventiko.com/paze3/suitcase/assets/suitcase.mp4",
+        websiteUrl = "https://motion.inventiko.com/paze3/suitcase/index-suitcase.html"
+    ),
+    CarouselProduct(
+        id = 5,
+        label = "Round Headphone",
+        imageUrl   = "https://motion.inventiko.com/paze3/suitcase/assets/round_headphone.png",
+        gifUrl     = "https://motion.inventiko.com/paze3/suitcase/assets/round_headphone.gif",
+        videoUrl   = "https://motion.inventiko.com/paze3/suitcase/assets/headphone.mp4",
+        websiteUrl = "https://motion.inventiko.com/paze3/headphone/"
+    ),
+    CarouselProduct(
+        id = 6,
+        label = "Square Headphone",
+        imageUrl   = "https://motion.inventiko.com/paze3/suitcase/assets/square_headphone.png",
+        gifUrl     = "https://motion.inventiko.com/paze3/suitcase/assets/square_headphone.gif",
+        videoUrl   = "https://motion.inventiko.com/paze3/suitcase/assets/headphone.mp4",
+        websiteUrl = "https://motion.inventiko.com/paze3/headphone/"
+    ),
+    CarouselProduct(
+        id = 7,
+        label = "Earbuds",
+        imageUrl   = "https://motion.inventiko.com/paze3/suitcase/assets/earbuds.png",
+        gifUrl     = "https://motion.inventiko.com/paze3/suitcase/assets/earbuds.gif",
+        videoUrl   = "https://motion.inventiko.com/paze3/suitcase/assets/earbuds.mp4",
+        websiteUrl = "https://motion.inventiko.com/paze3/suitcase/index-suitcase.html"
+    ),
+    CarouselProduct(
+        id = 8,
+        label = "Measuring Tape",
+        imageUrl   = "https://motion.inventiko.com/paze3/suitcase/assets/measuring_tape.png",
+        gifUrl     = "https://motion.inventiko.com/paze3/suitcase/assets/measuring_tape.gif",
+        videoUrl   = "https://motion.inventiko.com/paze3/suitcase/assets/measuring_tape.mp4",
+        websiteUrl = "https://motion.inventiko.com/paze3/suitcase/index-suitcase.html"
+    )
+)
+
+// ─── Default products for ConnectToPage3Section ───────────────────────────────
+
+val defaultConnectProducts = listOf(
+    CarouselProduct(
+        id = 101,
+        label      = "Smart Ring",
+        imageUrl   = "https://static.vecteezy.com/system/resources/previews/047/241/779/non_2x/3d-suitcase-isolated-on-transparent-background-free-png.png",
+        gifUrl     = "https://motion.inventiko.com/paze3/suitcase/assets/suitcase.gif",
+        videoUrl   = "https://motion.inventiko.com/paze3/suitcase/assets/suitcase.mp4",
+        websiteUrl = "",
+        sdkRoute   = SdkRoute.Ring
+    ),
+    CarouselProduct(
+        id = 102,
+        label      = "Smart Bottle",
+        imageUrl   = "https://motion.inventiko.com/paze3/suitcase/assets/round_headphone.png",
+        gifUrl     = "https://motion.inventiko.com/paze3/suitcase/assets/round_headphone.gif",
+        videoUrl   = "https://motion.inventiko.com/paze3/suitcase/assets/headphone.mp4",
+        websiteUrl = "",
+        sdkRoute   = SdkRoute.Bottle
+    ),
+    CarouselProduct(
+        id = 103,
+        label      = "V-Band",
+        imageUrl   = "https://motion.inventiko.com/paze3/suitcase/assets/square_headphone.png",
+        gifUrl     = "https://motion.inventiko.com/paze3/suitcase/assets/square_headphone.gif",
+        videoUrl   = "https://motion.inventiko.com/paze3/suitcase/assets/headphone.mp4",
+        websiteUrl = "",
+        sdkRoute   = SdkRoute.VBand
+    )
+)
+
+// ─── Helper: degrees → radians (replaces Java's Math.toRadians) ──────────────
+
+private fun Double.toRadians(): Double = this * PI / 180.0
+
+// ─── Public entry-point (with title) ─────────────────────────────────────────
+
 @Composable
-fun ProductCarousel3D(
-    products: List<CarouselProduct>,
+fun AppStyleProductCarousel(
     modifier: Modifier = Modifier,
-    itemCount: Int = products.size.coerceIn(3, products.size),
-    carouselWidth: Dp = 300.dp,
-    carouselHeight: Dp = 340.dp,
+    products: List<CarouselProduct> = defaultCarouselProducts,
+    title: String = "Featured Products",
+    initialIndex: Float = 0f,
+    onIndexChanged: (Float) -> Unit = {},
     onItemClick: (product: CarouselProduct, index: Int) -> Unit = { _, _ -> }
 ) {
-    require(products.isNotEmpty()) { "products must not be empty" }
-
-    val cellCount = itemCount.coerceIn(3, products.size)
-
-    // ── Animated spin angle ───────────────────────────────────
-    var selectedIndex by remember { mutableStateOf(0) }
-    val spinAngle by animateFloatAsState(
-        targetValue   = (360f / cellCount) * selectedIndex * -1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness    = Spring.StiffnessMedium
-        ),
-        label = "spinAngle"
-    )
-
-    // ── Swipe / drag ──────────────────────────────────────────
-    var dragAccumulator by remember { mutableStateOf(0f) }
-    val swipeThreshold  = 40f
-
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = modifier
-            .size(carouselWidth, carouselHeight)
-            .pointerInput(cellCount) {
-                val tracker = VelocityTracker()
-                detectHorizontalDragGestures(
-                    onDragStart   = { tracker.resetTracking(); dragAccumulator = 0f },
-                    onHorizontalDrag = { change, amount ->
-                        change.consume()
-                        tracker.addPosition(change.uptimeMillis, change.position)
-                        dragAccumulator += amount
-                    },
-                    onDragEnd     = {
-                        if (abs(dragAccumulator) > swipeThreshold) {
-                            selectedIndex += if (dragAccumulator < 0) 1 else -1
-                        }
-                        dragAccumulator = 0f
-                    },
-                    onDragCancel  = { dragAccumulator = 0f }
-                )
-            }
-    ) {
-        // Compute ring radius in px from the container width
-        val density   = androidx.compose.ui.platform.LocalDensity.current
-        val widthPx   = with(density) { carouselWidth.toPx() }
-        // radius: distance from centre to each cell centre on the XZ plane
-        val radius    = (widthPx / 2f) / tan(PI.toFloat() / cellCount)
-        val liftMax   = with(density) { carouselHeight.toPx() } * 0.28f
-        val thetaDeg  = 360f / cellCount
-
-        products.take(cellCount).forEachIndexed { i, product ->
-            // Static slot angle for this cell (degrees, around Y axis)
-            val slotDeg = thetaDeg * i
-
-            // World-facing angle after carousel spins
-            var worldDeg = (slotDeg + spinAngle) % 360f
-            if (worldDeg >  180f) worldDeg -= 360f
-            if (worldDeg < -180f) worldDeg += 360f
-
-            val dist = abs(worldDeg)   // 0 = front, 180 = back
-
-            // ── 2-D projection of ring position ──────────────
-            // X: cell moves left/right like a point on a circle viewed from above
-            //    sin(0°)=0 (centre/front), sin(90°)=1 (far right), sin(180°)=0 (centre/back)
-            val slotRad  = slotDeg * PI.toFloat() / 180f
-            val spinRad  = spinAngle * PI.toFloat() / 180f
-            val totalRad = slotRad + spinRad
-            val tx       = radius * sin(totalRad)          // horizontal offset
-
-            // Y: back cells rise upward (cos curve)
-            //    cos(0°)=1 (front → no lift), cos(180°)=-1 (back → full lift)
-            val ty = -(1f - cos(dist * PI.toFloat() / 180f)) / 2f * liftMax
-
-            // ── Visual depth cues ─────────────────────────────
-            val scaleFactor = 1.2f  - (dist / 180f) * 0.45f   // 1.20 → 0.75
-            val cellAlpha   = 1f    - (dist / 180f) * 0.55f   // 1.00 → 0.45
-            val blurAmount  = (dist / 180f) * 6f               // 0dp  → 6dp
-            val labelAlpha  = if (dist < 45f) 1f else 0f
-
-            // ── Z-order: front cell drawn last (on top) ───────
-            // We achieve painter's-algorithm ordering via the loop order combined
-            // with the cosine of totalRad (positive = coming toward viewer).
-            val zOrder = cos(totalRad)   // +1 front, -1 back
-
-            CarouselCell(
-                product      = product,
-                productIndex = i,
-                translationX = tx,
-                translationY = ty,
-                zOrder       = zOrder,
-                scale        = scaleFactor,
-                alpha        = cellAlpha,
-                blurDp       = blurAmount.dp,
-                labelAlpha   = labelAlpha,
-                onItemClick  = onItemClick
-            )
-        }
+    Column(modifier = modifier) {
+        Text(
+            text = title,
+            fontWeight = FontWeight.Bold,
+            fontSize = 18.sp,
+            color = Color.Black,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+        AppStyleProductCarousel3D(
+            products = products,
+            initialIndex = initialIndex,
+            onIndexChanged = onIndexChanged,
+            onItemClick = onItemClick
+        )
     }
 }
 
-// ─────────────────────────────────────────────
-//  Single cell
-// ─────────────────────────────────────────────
+// ─── 3-D Carousel ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun CarouselCell(
-    product: CarouselProduct,
-    productIndex: Int,
-    translationX: Float,
-    translationY: Float,
-    zOrder: Float,
-    scale: Float,
-    alpha: Float,
-    blurDp: Dp,
-    labelAlpha: Float,
-    onItemClick: (CarouselProduct, Int) -> Unit
+fun AppStyleProductCarousel3D(
+    products: List<CarouselProduct> = defaultCarouselProducts,
+    initialIndex: Float = 0f,
+    onIndexChanged: (Float) -> Unit = {},
+    onItemClick: (product: CarouselProduct, index: Int) -> Unit = { _, _ -> }
 ) {
-    val painter = rememberImagePainter(product.imageUrl)
+    if (products.isEmpty()) return
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+    var selectedIndex by remember { mutableStateOf(initialIndex) }
+
+    LaunchedEffect(initialIndex) { selectedIndex = initialIndex }
+
+    val animatedIndex by animateFloatAsState(
+        targetValue = selectedIndex,
+        animationSpec = tween(durationMillis = 600),
+        label = "appStyleCarouselAnimation"
+    )
+
+    val count = products.size
+    val theta = 360f / count
+
+    BoxWithConstraints(
         modifier = Modifier
-            .wrapContentSize()
-            .graphicsLayer {
-                this.translationX = translationX
-                this.translationY = translationY
-                this.scaleX       = scale
-                this.scaleY       = scale
-                this.alpha        = alpha
-                // cameraDistance gives mild perspective foreshortening on rotationY
-                this.cameraDistance = 12f * density
-                // Slight rotationY so each card always faces the viewer
-                // (same maths as the HTML: each cell is rotated to its slot)
-                // Here we keep cards fully facing forward (rotationY = 0) for
-                // simplicity; set to -worldDeg if you prefer angled cards.
-                this.rotationY = 0f
-            }
-            .alpha(alpha)                     // also drives hit-test transparency
-            .pointerInput(productIndex) {
-                detectTapGesturesCompat { onItemClick(product, productIndex) }
-            }
+            .fillMaxWidth()
+            .height(550.dp)
+            .pointerInput(count) {
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        selectedIndex = round(selectedIndex)
+                        onIndexChanged(selectedIndex)
+                    },
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
+                        selectedIndex -= dragAmount / 400f
+                    }
+                )
+            },
+        contentAlignment = Alignment.Center
     ) {
-        Image(
-            painter            = painter,
-            contentDescription = product.label,
-            contentScale       = ContentScale.Fit,
-            modifier           = Modifier
-                .size(160.dp, 200.dp)
-                .let { if (blurDp.value > 0.5f) it.blur(blurDp) else it }
-        )
+        val width = constraints.maxWidth.toFloat()
+        val radius = width / 2.1f
 
-        Spacer(Modifier.height(8.dp))
+        products.forEachIndexed { index, product ->
+            key(product.id) {
+                val slotAngle = theta * index
+                val spinAngle = animatedIndex * theta * -1f
 
-        Text(
-            text          = product.label,
-            fontSize      = 14.sp,
-            fontWeight    = FontWeight.SemiBold,
-            color         = Color(0xFFE0E0E0),
-            textAlign     = TextAlign.Center,
-            letterSpacing = 0.5.sp,
-            modifier      = Modifier.alpha(labelAlpha)
-        )
-    }
-}
+                var worldAngle = (slotAngle + spinAngle) % 360f
+                if (worldAngle > 180f) worldAngle -= 360f
+                if (worldAngle < -180f) worldAngle += 360f
 
-// ─────────────────────────────────────────────
-//  Tap helper — does NOT consume drag events
-// ─────────────────────────────────────────────
+                val dist = abs(worldAngle)
+                val sortingPriority = (180f - dist) * 10f
+                val maxLift = 340f
+                val yOffset = -(dist / 180f).pow(1.5f) * maxLift
+                val scale = 0.3f + 1.4f * (1f - dist / 180f).pow(3f)
+                val opacity = 1f - (dist / 180f) * 0.4f
+                val blurRadius = (dist / 180f) * 6f
+                val isFront = dist < (theta / 2.5f)
 
-private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectTapGesturesCompat(
-    onTap: (Offset) -> Unit
-) {
-    awaitPointerEventScope {
-        while (true) {
-            val down    = awaitPointerEvent()
-            val downPos = down.changes.firstOrNull()?.position ?: continue
-            val up      = awaitPointerEvent()
-            val upPos   = up.changes.firstOrNull()?.position ?: continue
-            if ((downPos - upPos).getDistance() < 20f) onTap(upPos)
+                Box(
+                    modifier = Modifier
+                        .zIndex(sortingPriority)
+                        .size(200.dp, 260.dp)
+                        .graphicsLayer {
+                            // ✅ Use kotlin.math.sin + our extension instead of Math.toRadians
+                            translationX =
+                                radius * sin(worldAngle.toDouble().toRadians()).toFloat()
+                            translationY = yOffset
+                            scaleX = scale
+                            scaleY = scale
+                            alpha = opacity
+                            rotationY = 0f
+                            cameraDistance = 8f * density
+                        }
+                        .blur(blurRadius.dp)
+                        .clickable(enabled = isFront) {
+                            onItemClick(product, index)
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        var isGifReady   by remember(product.id) { mutableStateOf(false) }
+                        var isGifError   by remember(product.id) { mutableStateOf(false) }
+                        var isVideoReady by remember(product.id) { mutableStateOf(false) }
+                        var isVideoError by remember(product.id) { mutableStateOf(false) }
+
+                        LaunchedEffect(dist < theta * 1.5f) {
+                            if (dist >= theta * 1.5f) {
+                                isGifReady   = false
+                                isVideoReady = false
+                            }
+                        }
+
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .fillMaxWidth(0.9f)
+                                .aspectRatio(1f)
+                        ) {
+                            val readyAlpha by animateFloatAsState(
+                                targetValue = if (isGifReady || isVideoReady) 1f else 0f,
+                                animationSpec = tween(300),
+                                label = "carouselReadyFade"
+                            )
+
+                            val proximityAlpha = remember(dist, theta) {
+                                val startFade = theta * 0.6f
+                                val endFade   = theta * 0.2f
+                                ((startFade - dist) / (startFade - endFade)).coerceIn(0f, 1f)
+                            }
+
+                            val animationAlpha = readyAlpha * proximityAlpha
+
+                            // Static fallback image
+                            Box(modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer { alpha = 1f - animationAlpha }
+                            ) {
+                                CarouselNetworkImage(
+                                    imageUrl = product.imageUrl,
+                                    contentDescription = product.label,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+
+                            // Animated overlay: GIF → video fallback
+                            if (dist < theta * 1.5f) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer { alpha = animationAlpha }
+                                ) {
+                                    if (!isGifError) {
+                                        CarouselGifImage(
+                                            gifUrl = product.gifUrl,
+                                            contentDescription = product.label,
+                                            modifier = Modifier.fillMaxSize(),
+                                            onSuccess = { isGifReady = true },
+                                            onError   = { isGifError = true }
+                                        )
+                                    } else if (!isVideoError) {
+                                        CarouselVideoPlayer(
+                                            videoUrl = product.videoUrl,
+                                            modifier = Modifier.fillMaxSize(),
+                                            onReady  = { isVideoReady = true },
+                                            onError  = { isVideoError = true }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Label (front item only)
+                        AnimatedVisibility(
+                            visible = isFront,
+                            enter = fadeIn(tween(800)) + expandVertically(
+                                animationSpec = tween(800),
+                                expandFrom = Alignment.Top
+                            ),
+                            exit = fadeOut(tween(800)) + shrinkVertically(
+                                animationSpec = tween(800),
+                                shrinkTowards = Alignment.Top
+                            )
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = product.label.uppercase(),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp,
+                                    color = Color.Black,
+                                    letterSpacing = 1.2.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
-// ─────────────────────────────────────────────
-//  Sample data + preview screen
-// ─────────────────────────────────────────────
+// ─── expect declarations ───────────────────────────────────────────────────────
 
-private val sampleProducts = listOf(
-    CarouselProduct("https://static.vecteezy.com/system/resources/previews/047/241/779/non_2x/3d-suitcase-isolated-on-transparent-background-free-png.png", "Suitcase"),
-    CarouselProduct("https://www.kibotek.com/wp-content/uploads/2024/08/kiboTEK_xiaomi_band_9_027.png", "Smart Band"),
-    CarouselProduct("https://www.navinmart.com/cdn/shop/files/0003_85383606-d8f7-491a-b472-8bc34e1d1d73.png", "Smart Bottle"),
-    CarouselProduct("https://merlin-digital.com/cdn/shop/files/smartringnew2.png", "Smart Ring"),
-    CarouselProduct("https://www.fingers.co.in/secure/api/image-tool/index.php?src=https://www.fingers.co.in/secure/api/uploads/products/1764393128_3.png&w=500&h=500&zc=2", "Headphone"),
-    CarouselProduct("https://elver.in/cdn/shop/files/Elver_Buds_X_True_Wireless_Earbuds.png", "Earbuds"),
+@Composable
+expect fun CarouselVideoPlayer(
+    videoUrl: String,
+    modifier: Modifier = Modifier,
+    onReady: () -> Unit,
+    onError: () -> Unit
 )
 
 @Composable
-fun ProductCarouselScreen() {
-    var lastClicked by remember { mutableStateOf<CarouselProduct?>(null) }
+expect fun CarouselGifImage(
+    gifUrl: String,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    onSuccess: () -> Unit,
+    onError: () -> Unit
+)
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF1A1A2E)),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            ProductCarousel3D(
-                products       = sampleProducts,
-                itemCount      = 6,
-                carouselWidth  = 300.dp,
-                carouselHeight = 360.dp,
-                onItemClick    = { product, index ->
-                    lastClicked = product
-                    // e.g. navController.navigate("detail/$index")
-                }
-            )
-
-            Spacer(Modifier.height(24.dp))
-
-            lastClicked?.let { p ->
-                Text(
-                    text       = "Selected: ${p.label}",
-                    color      = Color(0xFFE94560),
-                    fontSize   = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier   = Modifier
-                        .background(Color(0xFF16213E), RoundedCornerShape(20.dp))
-                        .padding(horizontal = 20.dp, vertical = 10.dp)
-                )
-            }
-        }
-    }
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFF1A1A2E)
 @Composable
-private fun PreviewCarousel() {
-    ProductCarouselScreen()
-}
+expect fun CarouselNetworkImage(
+    imageUrl: String,
+    contentDescription: String,
+    modifier: Modifier = Modifier
+)

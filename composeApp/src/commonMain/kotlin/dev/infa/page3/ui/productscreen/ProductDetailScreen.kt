@@ -76,19 +76,15 @@ import dev.infa.page3.ui.productscreen.components.ProductImageGallery
 import dev.infa.page3.ui.productscreen.components.productGalleryUrlsForDetail
 import dev.infa.page3.data.model.Product
 import dev.infa.page3.data.model.WcAttributes
-import dev.infa.page3.data.remote.SessionManager
 import dev.infa.page3.navigation.CartScreenNav
-import dev.infa.page3.presentation.api.ApiService
-import dev.infa.page3.presentation.repositary.RatingRepository
-import dev.infa.page3.presentation.repositary.ReviewRepository
 import dev.infa.page3.presentation.viewModel.ProductViewModel
-import dev.infa.page3.presentation.viewModel.RatingViewModel
+import dev.infa.page3.presentation.viewModel.ProductReviewsViewModel
 import dev.infa.page3.presentation.uiSatateClaases.SingleUiState
 import dev.infa.page3.presentation.viewModel.AuthViewModel
 import dev.infa.page3.presentation.viewModel.CartViewModel
 import dev.infa.page3.presentation.viewModel.CategoryViewModel
-import dev.infa.page3.presentation.viewModel.ReviewViewModel
 import dev.infa.page3.presentation.viewmodel.WishlistViewModel
+import org.koin.mp.KoinPlatform
 import dev.infa.page3.ui.AppSideBar
 import dev.infa.page3.ui.components.BottomNavBar
 import dev.infa.page3.ui.components.ErrorScreen
@@ -107,17 +103,13 @@ fun ProductDetailScreen(
     authViewModel: AuthViewModel,
     categoryViewModel: CategoryViewModel
 ) {
-    val ratingViewModel: RatingViewModel = remember {
-        RatingViewModel(RatingRepository(ApiService(), SessionManager()))
-    }
-
-    val reviewViewModel: ReviewViewModel = remember {
-        ReviewViewModel(ReviewRepository(ApiService(), SessionManager()))
+    val productReviewsViewModel: ProductReviewsViewModel = remember {
+        KoinPlatform.getKoin().get()
     }
 
     val productState by productViewModel.selectedProductState.collectAsState()
-    val averageRating by ratingViewModel.averageRating.collectAsState()
-    val reviewCount by reviewViewModel.reviewCount.collectAsState()
+    val averageRating by productReviewsViewModel.averageRating.collectAsState()
+    val reviewCount by productReviewsViewModel.reviewCount.collectAsState()
 
     // State for selected attributes and quantity
     var selectedAttributes by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
@@ -126,8 +118,7 @@ fun ProductDetailScreen(
 
     LaunchedEffect(productId) {
         productViewModel.getProductById(productId)
-        ratingViewModel.loadProductRatings(productId)
-        reviewViewModel.loadProductReviews(productId)
+        productReviewsViewModel.loadProductReviews(productId)
         // Reset selections when product changes
         selectedAttributes = emptyMap()
         quantity = 1
